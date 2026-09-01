@@ -67,3 +67,9 @@ IDS_CL_SF-SOINN/
 | SVM | 1 |
 | BiLSTM | 3 (`42, 123, 7`) |
 | Proposed (AE+TCN+SF-SOINN) | 5 (`42, 123, 7, 2024, 999`) |
+
+
+## script usage
+
+To download the data use :
+    python src/utils/dwnld_data.py --dataset {netml2020 || cicids2017 || all (for both)}
