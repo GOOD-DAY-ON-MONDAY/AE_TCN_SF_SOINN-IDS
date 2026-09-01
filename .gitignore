@@ -1,0 +1,5 @@
+.aider/
+.claude/
+.vscode/
+data/processed/*
+data/raw/*
