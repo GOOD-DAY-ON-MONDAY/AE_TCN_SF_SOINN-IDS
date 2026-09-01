@@ -5,58 +5,57 @@ Continual-learning NIDS: Autoencoder → 1D-TCN (known-threat classification) �
 **Status:** folder structure only — no code written yet. This README describes the intended workflow so contributions land in the right place.
 
 ## Structure (planned)
-.
-└── IDS_CL_SF-SOINN/
-    ├── .github/
-    │   └── workflows
-    ├── data/
-    │   ├── raw/
-    │   │   ├── netML2020/
-    │   │   │   ├── training.csv
-    │   │   │   ├── annotation.csv
-    │   │   │   └── testing.csv
-    │   │   └── cicids2017/
-    │   │       ├── training.csv
-    │   │       ├── annotation.csv
-    │   │       └── testing.csv
-    │   ├── processed/
-    │   │   ├── netML
-    │   │   └── cicids2017
-    │   └── splits/
-    │       ├── netml_split.json
-    │       └── cicids2017_split.json
-    ├── src/
-    │   ├── utils/
-    │   │   ├── cleaner.py
-    │   │   └── annotator.py
-    │   ├── models
-    │   ├── dataloader.py
-    │   ├── train.py
-    │   └── evaluate.py
-    ├── models/
-    │   ├── proposed/
-    │   │   ├── AE
-    │   │   ├── TCN
-    │   │   └── AE_TCN_SF-SOINN/
-    │   │       ├── seed_42
-    │   │       ├── seed_123
-    │   │       ├── .
-    │   │       ├── .
-    │   │       └── .
-    │   └── baseline/
-    │       ├── Random Forest
-    │       ├── SVM
-    │       └── BiLSTM
-    ├── reports/
-    │   ├── proposed
-    │   └── comparsion results
-    ├── logs/
-    ├── configs/
-    ├── .gitignore
-    ├── requirements.txt
-    ├── references.bib
-    └── README.md
 
+IDS_CL_SF-SOINN/
+├── .github/
+│   └── workflows/
+├── data/
+│   ├── raw/
+│   │   ├── netML2020/
+│   │   │   ├── training.csv
+│   │   │   ├── annotation.csv
+│   │   │   └── testing.csv
+│   │   └── cicids2017/
+│   │       ├── training.csv
+│   │       ├── annotation.csv
+│   │       └── testing.csv
+│   ├── processed/
+│   │   ├── netML/
+│   │   └── cicids2027/
+│   └── splits/
+│       ├── netml_split.json
+│       └── cicids2017_split.json
+├── src/
+│   ├── utils/
+│   │   ├── cleaner.py
+│   │   └── annotator.py
+│   ├── models/
+│   ├── dataloader.py
+│   ├── train.py
+│   └── evaluate.py
+├── models/
+│   ├── proposed/
+│   │   ├── AE/
+│   │   ├── TCN/
+│   │   └── AE_TCN_SF-SOINN/
+│   │       ├── seed_42/
+│   │       ├── seed_123/
+│   │       ├── .
+│   │       ├── .
+│   │       └── .
+│   └── baseline/
+│       ├── Random Forest/
+│       ├── SVM/
+│       └── BiLSTM/
+├── reports/
+│   ├── proposed/
+│   └── comparsion results/
+├── logs/
+├── configs/
+├── .gitignore
+├── requirements.txt
+├── references.bib
+└── README.md
 ## Seed plan
 
 | Model | Seeds |
