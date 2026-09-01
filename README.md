@@ -6,12 +6,13 @@ Continual-learning NIDS: Autoencoder → 1D-TCN (known-threat classification) �
 
 ## Structure (planned)
 
+```
 IDS_CL_SF-SOINN/
 ├── .github/
 │   └── workflows/
 ├── data/
 │   ├── raw/
-│   │   ├── netML2020/
+│   │   ├── netml2020/
 │   │   │   ├── training.csv
 │   │   │   ├── annotation.csv
 │   │   │   └── testing.csv
@@ -20,8 +21,8 @@ IDS_CL_SF-SOINN/
 │   │       ├── annotation.csv
 │   │       └── testing.csv
 │   ├── processed/
-│   │   ├── netML/
-│   │   └── cicids2027/
+│   │   ├── netml2020/
+│   │   └── cicids2017/
 │   └── splits/
 │       ├── netml_split.json
 │       └── cicids2017_split.json
@@ -37,25 +38,27 @@ IDS_CL_SF-SOINN/
 │   ├── proposed/
 │   │   ├── AE/
 │   │   ├── TCN/
-│   │   └── AE_TCN_SF-SOINN/
+│   │   └── AE_TCN_SFSOINN/
 │   │       ├── seed_42/
 │   │       ├── seed_123/
-│   │       ├── .
-│   │       ├── .
-│   │       └── .
+│   │       ├── seed_7/
+│   │       ├── seed_2024/
+│   │       └── seed_999/
 │   └── baseline/
-│       ├── Random Forest/
-│       ├── SVM/
-│       └── BiLSTM/
+│       ├── random_forest/
+│       ├── svm/
+│       └── bilstm/
 ├── reports/
 │   ├── proposed/
-│   └── comparsion results/
+│   └── comparison_results/
 ├── logs/
 ├── configs/
 ├── .gitignore
 ├── requirements.txt
 ├── references.bib
 └── README.md
+```
+
 ## Seed plan
 
 | Model | Seeds |
@@ -64,13 +67,3 @@ IDS_CL_SF-SOINN/
 | SVM | 1 |
 | BiLSTM | 3 (`42, 123, 7`) |
 | Proposed (AE+TCN+SF-SOINN) | 5 (`42, 123, 7, 2024, 999`) |
-
-## Next steps
-
-1. Write `download_data.py` and pull the raw data.
-2. Generate and commit the split files in `data/splits/`.
-3. Write `dataloader.py` against the committed split.
-4. Write `logger.py` (`log_result`) and `config_loader.py`.
-5. Build one reference model end-to-end (e.g. Random Forest) as the template for everyone else.
-
-Once step 5 lands, this README will be updated with the actual usage commands.
