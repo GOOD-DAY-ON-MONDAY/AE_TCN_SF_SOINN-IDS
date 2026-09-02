@@ -72,4 +72,5 @@ IDS_CL_SF-SOINN/
 ## script usage
 
 To download the data use :
-   `python src/utils/dwnld_data.py --dataset {netml2020 || cicids2017 || all (for both)}`
+    python src/utils/dwnld_data.py --dataset {netml2020 || cicids2017 || all (for both)}
+    python src/utils/dwnld_data.py --force --dataset {netml2020 || cicids2017 || all (for both)} (incase dataset needs to be redownloaded because of data corruption)
