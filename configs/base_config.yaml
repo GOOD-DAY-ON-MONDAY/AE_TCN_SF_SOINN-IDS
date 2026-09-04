@@ -1,18 +1,9 @@
 # ==============================================================================
-# netml-cl project — configs/base_config.yaml
+# AE_TCN_SFSONIN project — configs/base_config.yaml
 # ==============================================================================
 #
 # DATASET CONTEXT
 # ---------------
-# Two datasets live under data/raw/, each already pre-split by the original
-# challenge into four folders — this is NOT something we re-split ourselves:
-#
-#   0_test-challenge_set/
-#   1_test-std_set/
-#   2_training_annotations/   (labels, only exists for the training set)
-#   2_training_set/           (features, as a .json.gz file, e.g.
-#                              2_training_set.json.gz)
-#
 # Both datasets have 121 raw features per flow (same schema).
 #
 # netml2020 (data/raw/netml2020/2_training_set): 387,268 training rows,
@@ -26,21 +17,6 @@
 #
 # LABEL AVAILABILITY — 1_test-std_set / 0_test-challenge_set
 # ----------------------------------------------------------
-# VERIFICATION STATUS: the record-level check (opening a few records from
-# each test set to look for a ground-truth label field) could NOT be
-# performed when this file was written — the raw data was not readable in
-# that session, and the split manifests in data/splits/ (netml_split.json,
-# cicids2017_split.json) are empty and carry no label information. What IS
-# established is the NetML 2020 challenge design itself: test-std and
-# test-challenge were held-back leaderboard splits whose ground-truth
-# annotations were NOT distributed to participants. This config therefore
-# conservatively declares labels_available: false for both datasets.
-#
-# ACTION REQUIRED: run scripts/validate_data.py once the raw data is in
-# place. If it finds annotation files for either test set, flip that
-# dataset's labels_available to true and update docs/CONFIG.md. Until then,
-# the test sets may ONLY be used for unsupervised inference / demo purposes
-# — never for evaluation.
 
 data:
   netml2020:
@@ -82,9 +58,6 @@ data:
     raw_dir: data/raw/cicids2017
     training_set: data/raw/cicids2017/2_training_set/2_training_set.json.gz
     training_annotations: data/raw/cicids2017/2_training_annotations
-    # Labels NOT found for either test split (challenge withheld test
-    # annotations; pending re-verification via scripts/validate_data.py —
-    # see LABEL AVAILABILITY note above).
     test_std_dir: data/raw/cicids2017/1_test-std_set
     test_challenge_dir: data/raw/cicids2017/0_test-challenge_set
     labels_available: false
@@ -103,25 +76,15 @@ data:
   processed_dir: data/processed/
 
 splitting:
-  # No train/test split is needed: the raw data is already pre-divided by
-  # file into training / test-std / test-challenge folders by the original
-  # challenge (see DATASET CONTEXT above). Only two splits are configured
-  # here:
-  #
   # 1. val_split — a stratified fraction held out FROM the training_set
   #    only, used for early stopping / model selection. Governed by
   #    random_seed below for reproducibility.
   # 2. zero_day_classes — per-dataset class lists excluded from initial
   #    TCN training and held out for Stage 3 (SF-SOINN) zero-day
-  #    evaluation. See the TODO below; both start empty on purpose.
+  #    evaluation.
   val_split: 0.15
   random_seed: 42
   zero_day_classes:
-    # TODO: Fill in after running scripts/validate_data.py and reviewing
-    # docs/data_report.png — pick 3-5 lower-frequency, non-benign classes
-    # per dataset to exclude from initial TCN training and hold out for
-    # Stage 3 (SF-SOINN) zero-day evaluation. Do not guess this without
-    # checking real per-class counts first.
     netml2020: []
     cicids2017: []
 
