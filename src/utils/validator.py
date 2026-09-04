@@ -1,4 +1,4 @@
-"""Data validation for the netml-cl project.
+"""Data validation for the AE_TCN_SFSONIN_IDS project.
 
 Validates the raw datasets described in configs/base_config.yaml and
 produces the per-class count reports needed to pick zero_day_classes:
