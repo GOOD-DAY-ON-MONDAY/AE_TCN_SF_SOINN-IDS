@@ -5,3 +5,6 @@ data/processed/*
 data/raw/*
 __pycache__/
 .venv/
+prompt.md
+.aider.conf.yml
+.aider.*
