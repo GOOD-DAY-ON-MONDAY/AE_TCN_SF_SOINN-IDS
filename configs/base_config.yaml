@@ -22,7 +22,7 @@ data:
   netml2020:
     raw_dir: data/raw/netml2020
     training_set: data/raw/netml2020/2_training_set/2_training_set.json.gz
-    training_annotations: data/raw/netml2020/2_training_annotations
+    training_annotations: "data/raw/netml2020/2_training_annotations/2_training_anno_fine.json.gz"
     # Labels NOT found for either test split (challenge withheld test
     # annotations; pending re-verification via scripts/validate_data.py —
     # see LABEL AVAILABILITY note above).
@@ -57,7 +57,7 @@ data:
   cicids2017:
     raw_dir: data/raw/cicids2017
     training_set: data/raw/cicids2017/2_training_set/2_training_set.json.gz
-    training_annotations: data/raw/cicids2017/2_training_annotations
+    training_annotations: "data/raw/cicids2017/2_training_annotations/2_training_anno_fine.json.gz"
     test_std_dir: data/raw/cicids2017/1_test-std_set
     test_challenge_dir: data/raw/cicids2017/0_test-challenge_set
     labels_available: false
