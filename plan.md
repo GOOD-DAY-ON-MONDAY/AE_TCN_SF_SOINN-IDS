@@ -6,7 +6,6 @@
 - [ ] Pull per-class sample counts for both datasets (pending from earlier)
 - [ ] Build train/val/test splits **separately** for each dataset, excluding zero-day holdout classes from training
 - [ ] Set up PyArrow chunked loading pipeline (shared across both datasets)
-- [ ] Implement device-agnostic router (CUDA/MPS/CPU)
 - [ ] Train baseline models (SVM, RF, BiLSTM) on both datasets
 - [ ] Implement BiLSTM incremental fine-tuning protocol (sequential zero-day class introduction + retention measurement)
 - [ ] Train ablation models (PCA-32, AE+TCN w/o SF-SOINN, TCN on raw 121 w/o AE)
