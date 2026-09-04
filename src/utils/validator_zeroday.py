@@ -166,7 +166,7 @@ def count_training_classes(dataset_name: str, ds_cfg: Any) -> tuple[Counter[str]
             f"but the challenge docs say {expected:,} — verify the annotation file."
         )
 
-    class_map = dict(ds_cfg.class_map)
+    class_map = vars(ds_cfg.class_map)
     unknown = sorted(set(labels) - set(class_map))
     if unknown:
         print(
