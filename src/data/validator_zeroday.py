@@ -21,7 +21,7 @@ id -> label. If the real files use a different shape, adjust
 ``_LABEL_KEYS`` / ``_extract_labels`` — everything else stays the same.
 
 Usage (from the repo root):
-    python -m src.utils.validate_data
+    python -m src.data.validator_zeroday
 
 Exit code 0 = both datasets validated; 1 = at least one dataset could
 not be validated (e.g. raw data not downloaded yet).
@@ -84,7 +84,7 @@ def _find_annotation_file(annotations_path: Path, dataset_name: str) -> Path:
         raise FileNotFoundError(
             f"data.{dataset_name}.training_annotations does not exist: "
             f"'{annotations_path}' (raw data may not be downloaded yet — "
-            f"see src/utils/dwnld_data.py)"
+            f"see src/data/download.py)"
         )
     if annotations_path.is_file():
         return annotations_path
