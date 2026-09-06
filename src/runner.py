@@ -412,3 +412,87 @@ def _print_summary(row: dict[str, Any], n_eval: int) -> None:
     print(f"  {'peak_mem_gb':16s} {row['peak_mem_gb']:.4f}")
     print(f"  {'train_time_s':16s} {row['train_time_s']:.4f}")
     print(f"  run_dir:     {row['run_dir']}")
+
+
+# ---------------------------------------------------------------------------
+# Multi-seed loop + mean/std aggregation (ticket 06)
+# ---------------------------------------------------------------------------
+
+# Columns aggregated as mean ± std (all numeric run metrics).
+AGGREGATED_COLUMNS = (
+    "accuracy",
+    "precision",
+    "recall",
+    "f1",
+    "macro_precision",
+    "macro_recall",
+    "macro_f1",
+    "latency_ms",
+    "peak_mem_gb",
+    "train_time_s",
+)
+
+
+def aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, tuple[float, float]]:
+    """Aggregate run rows into per-metric (mean, std) pairs.
+
+    Std is the population standard deviation (ddof=0); a single row
+    yields std 0.0. Non-numeric columns are not aggregated.
+    """
+    if not rows:
+        raise RunnerError("aggregate_rows() called with no run rows.")
+    agg: dict[str, tuple[float, float]] = {}
+    for key in AGGREGATED_COLUMNS:
+        values = np.asarray([float(r[key]) for r in rows], dtype=float)
+        agg[key] = (float(values.mean()), float(values.std()))
+    return agg
+
+
+def print_aggregate(agg: dict[str, tuple[float, float]], n_seeds: int) -> None:
+    """Print the mean ± std summary across seeds (no teammate code needed)."""
+    print(f"\n=== Aggregated over {n_seeds} seed(s) ===")
+    for key, (mean, std) in agg.items():
+        print(f"  {key:16s} {mean:.4f} ± {std:.4f}")
+
+
+def run_seeds(
+    model_dir: str | Path,
+    dataset: str,
+    seeds: list[int],
+    cfg: Any,
+    X_train: Any,
+    y_train: Any,
+    X_val: Any,
+    y_val: Any,
+    X_test: Any = None,
+    y_test: Any = None,
+    report_root: str | Path | None = None,
+    csv_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """One Run per seed, aggregated into mean ± std (ticket 06).
+
+    Returns the per-seed row list; aggregation is printed. Rerunning a
+    seed overwrites its ``seed_<n>/`` directory (notice printed by
+    ``run_single_seed``).
+    """
+    if not seeds:
+        raise RunnerError("--seeds received no values; give at least one seed.")
+    rows = [
+        run_single_seed(
+            model_dir=model_dir,
+            dataset=dataset,
+            seed=seed,
+            cfg=cfg,
+            X_train=X_train,
+            y_train=y_train,
+            X_val=X_val,
+            y_val=y_val,
+            X_test=X_test,
+            y_test=y_test,
+            report_root=report_root,
+            csv_path=csv_path,
+        )
+        for seed in seeds
+    ]
+    print_aggregate(aggregate_rows(rows), len(rows))
+    return rows

@@ -42,10 +42,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional ad-hoc YAML override file (highest config layer).",
     )
     p_train.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="One Run per seed, aggregated into mean ± std "
+        "(defaults to training.random_seed from config).",
+    )
+    # Back-compat alias: --seed N is treated as --seeds N.
+    p_train.add_argument(
         "--seed",
         type=int,
         default=None,
-        help="Random seed (defaults to training.random_seed from config).",
+        help=argparse.SUPPRESS,
     )
 
     sub.add_parser("list-models", help="List runnable model directories.")
@@ -64,7 +73,14 @@ def cmd_train(args: argparse.Namespace) -> int:
         model_config_path=model_yaml if model_yaml.is_file() else None,
         override_path=args.config,
     )
-    seed = args.seed if args.seed is not None else cfg.training.random_seed
+    seeds: list[int] = []
+    if getattr(args, "seeds", None):
+        seeds = list(args.seeds)
+    elif getattr(args, "seed", None) is not None:
+        seeds = [args.seed]
+    else:
+        seeds = [int(cfg.training.random_seed)]
+    seed = seeds[0]
 
     print(f"Model:   {model_dir}")
     print(f"Dataset: {dataset}")
@@ -78,7 +94,7 @@ def cmd_train(args: argparse.Namespace) -> int:
     import numpy as np
 
     from src.data.seam import assemble_run_arrays
-    from src.runner import run_single_seed
+    from src.runner import run_seeds
 
     ds_cfg = getattr(cfg.data, dataset)
     rng = np.random.default_rng(seed)
@@ -86,10 +102,10 @@ def cmd_train(args: argparse.Namespace) -> int:
     y = rng.integers(0, ds_cfg.num_classes, size=200)
     arrays = assemble_run_arrays(X, y, cfg.splitting.val_split, seed)
 
-    run_single_seed(
+    run_seeds(
         model_dir=model_dir,
         dataset=dataset,
-        seed=seed,
+        seeds=seeds,
         cfg=cfg,
         X_train=arrays.X_train,
         y_train=arrays.y_train,
