@@ -150,6 +150,32 @@ def deep_merge(base: dict, override: Mapping[str, Any]) -> dict:
     return merged
 
 
+def deep_merge_with_sources(
+    base: dict,
+    override: Mapping[str, Any],
+    source: str,
+    sources: dict[str, str] | None = None,
+    prefix: str = "",
+) -> dict[str, str]:
+    """Like :func:`deep_merge` but records which layer set each leaf key.
+
+    ``sources`` maps dotted key paths ("training.epochs") to the layer
+    label that last provided the value. Keys present in ``base`` but
+    never overridden keep whatever source label was already recorded
+    (pass the base layer's label when starting the chain).
+    Returns the (mutated) ``sources`` dict for convenience.
+    """
+    if sources is None:
+        sources = {}
+    for key, value in override.items():
+        path = f"{prefix}{key}"
+        if key in base and isinstance(base[key], Mapping) and isinstance(value, Mapping):
+            deep_merge_with_sources(dict(base[key]), value, source, sources, prefix=f"{path}.")
+        else:
+            sources[path] = source
+    return sources
+
+
 def load_merged_config(
     model_config_path: str | Path | None = None,
     override_path: str | Path | None = None,

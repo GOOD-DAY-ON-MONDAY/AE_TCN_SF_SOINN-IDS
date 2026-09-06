@@ -1,6 +1,7 @@
 """CLI entrypoint for the model-comparison Runner: ``python -m src.train``.
 
-Subcommands (v1): ``train``, ``list-models``, ``list-datasets``.
+Subcommands (v1): ``train``, ``show-config``, ``list-models``,
+``list-datasets``.
 Per CONTEXT.md Q7/Q9 the ``train`` subcommand merges three config layers
 (base -> <model_dir>/model.yaml -> ``--config``) in memory; the actual run
 logic is wired up in later tickets and currently prints a stub.
@@ -11,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any, Mapping
 
 from src.runner import VALID_DATASETS, RunnerError, discover_models, resolve_dataset, resolve_model
 from src.utils.config import load_merged_config
@@ -55,6 +57,28 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help=argparse.SUPPRESS,
+    )
+
+    p_show = sub.add_parser(
+        "show-config",
+        help="Print the fully merged config for a model/dataset "
+        "(base -> model.yaml -> --config) without running anything.",
+    )
+    p_show.add_argument(
+        "--model",
+        required=True,
+        help="Path to a model directory (its model.yaml is layer 2 if present).",
+    )
+    p_show.add_argument(
+        "--dataset",
+        required=True,
+        choices=VALID_DATASETS,
+        help="Dataset context for the merged config.",
+    )
+    p_show.add_argument(
+        "--config",
+        default=None,
+        help="Optional ad-hoc YAML override file (highest config layer).",
     )
 
     sub.add_parser("list-models", help="List runnable model directories.")
@@ -125,6 +149,91 @@ def cmd_train(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_show_config(args: argparse.Namespace) -> int:
+    from src.utils.config import (
+        DEFAULT_CONFIG_PATH,
+        _load_yaml_mapping,
+        deep_merge,
+        deep_merge_with_sources,
+    )
+
+    model_dir = resolve_model(args.model)
+    dataset = resolve_dataset(args.dataset)
+
+    model_yaml = Path(model_dir) / "model.yaml"
+    layer2 = model_yaml if model_yaml.is_file() else None
+
+    base = _load_yaml_mapping(DEFAULT_CONFIG_PATH)
+    merged = dict(base)
+    sources: dict[str, str] = {}
+
+    layers: list[tuple[dict | None, str]] = [
+        (base, f"base: {DEFAULT_CONFIG_PATH}"),
+    ]
+    if layer2 is not None:
+        layer_cfg = _load_yaml_mapping(layer2)
+        merged = deep_merge(merged, layer_cfg)
+        deep_merge_with_sources(base, layer_cfg, "model.yaml", sources)
+        layers.append((layer_cfg, f"model.yaml: {layer2}"))
+    if args.config:
+        layer_cfg = _load_yaml_mapping(args.config)
+        merged = deep_merge(merged, layer_cfg)
+        deep_merge_with_sources(merged, layer_cfg, "--config", sources)
+        layers.append((layer_cfg, f"--config: {args.config}"))
+    # Base layer contributes everything not later-overridden.
+    _record_base_sources(base, sources, "base")
+
+    print("# Effective merged config (dataset: %s)" % dataset)
+    for _, label in layers:
+        print("# layer: %s" % label)
+    print("# markers:  # <- model.yaml   # <- --config   (no marker = base)")
+    print(_yaml_with_sources(merged, sources))
+
+    overridden = {p for p, s in sources.items() if s in ("model.yaml", "--config")}
+    if overridden:
+        print("\n# Overridden keys:")
+        for path in sorted(overridden):
+            print("#   %s <- %s" % (path, sources[path]))
+    else:
+        print("\n# No keys overridden; all values inherited from base.")
+    return 0
+
+
+def _record_base_sources(
+    mapping: Mapping, sources: dict[str, str], label: str, prefix: str = ""
+) -> None:
+    for key, value in mapping.items():
+        path = f"{prefix}{key}"
+        if isinstance(value, Mapping):
+            _record_base_sources(value, sources, label, prefix=f"{path}.")
+        elif path not in sources:
+            sources[path] = label
+
+
+
+
+def _yaml_with_sources(merged: dict, sources: dict[str, str]) -> str:
+    """Dump merged config as YAML, annotating leaf keys with their source."""
+    import yaml as _yaml
+
+    lines: list[str] = []
+
+    def walk(node: Any, prefix: str, indent: int) -> None:
+        for key, value in node.items():
+            path = f"{prefix}{key}"
+            pad = "  " * indent
+            if isinstance(value, Mapping):
+                lines.append(f"{pad}{key}:")
+                walk(value, f"{path}.", indent + 1)
+            else:
+                src = sources.get(path, "base")
+                marker = "" if src == "base" else f"   # <- {src}"
+                lines.append(f"{pad}{key}: {_yaml.safe_dump(value, default_flow_style=True).strip()}{marker}")
+
+    walk(merged, "", 0)
+    return "\n".join(lines)
+
+
 def cmd_list_models() -> int:
     models = discover_models()
     if not models:
@@ -146,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "train":
             return cmd_train(args)
+        if args.command == "show-config":
+            return cmd_show_config(args)
         if args.command == "list-models":
             return cmd_list_models()
         if args.command == "list-datasets":
