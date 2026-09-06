@@ -13,8 +13,8 @@ seam returns ``None`` for the test halves and evaluation falls back to val.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import SimpleNamespace
-from typing import Mapping
 
 import numpy as np
 

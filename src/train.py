@@ -9,10 +9,17 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-from src.runner import VALID_DATASETS, RunnerError, discover_models, resolve_dataset, resolve_model
+from src.runner import (
+    VALID_DATASETS,
+    RunnerError,
+    discover_models,
+    resolve_dataset,
+    resolve_model,
+)
 from src.utils.config import load_merged_config
 
 
@@ -114,7 +121,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         seeds = [int(cfg.training.random_seed)]
     seed = seeds[0]
 
-    from src.utils.ui import format_error, print_plan
+    from src.utils.ui import print_plan
 
     model_yaml = Path(model_dir) / "model.yaml"
     print_plan(
@@ -242,9 +249,9 @@ def cmd_show_config(args: argparse.Namespace) -> int:
     # Base layer contributes everything not later-overridden.
     _record_base_sources(base, sources, "base")
 
-    print("# Effective merged config (dataset: %s)" % dataset)
+    print(f"# Effective merged config (dataset: {dataset})")
     for _, label in layers:
-        print("# layer: %s" % label)
+        print(f"# layer: {label}")
     print("# markers:  # <- model.yaml   # <- --config   (no marker = base)")
     print(_yaml_with_sources(merged, sources))
 
@@ -252,7 +259,7 @@ def cmd_show_config(args: argparse.Namespace) -> int:
     if overridden:
         print("\n# Overridden keys:")
         for path in sorted(overridden):
-            print("#   %s <- %s" % (path, sources[path]))
+            print(f"#   {path} <- {sources[path]}")
     else:
         print("\n# No keys overridden; all values inherited from base.")
     return 0

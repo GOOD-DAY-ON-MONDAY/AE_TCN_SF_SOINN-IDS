@@ -1,6 +1,6 @@
 import argparse
-import subprocess
 import shutil
+import subprocess
 from pathlib import Path
 
 REPO_URL = "https://github.com/ACANETS/NetML-Competition2020.git"
@@ -28,13 +28,13 @@ def download_dataset(dataset_name: str, force: bool = False):
 
     print(f"=== Downloading {dataset_name} from {REPO_URL} ===")
 
-    if target_dir.exists() and not force:
-        if target_dir.is_dir() and any(target_dir.iterdir()):
-            print(f"[SKIP] '{dataset_name}' already exists at {target_dir} — skipping download.")
-            return
-        elif target_dir.is_file():
-            print(f"[SKIP] '{dataset_name}' already exists at {target_dir} — skipping download.")
-            return
+    if (
+        target_dir.exists()
+        and not force
+        and ((target_dir.is_dir() and any(target_dir.iterdir())) or target_dir.is_file())
+    ):
+        print(f"[SKIP] '{dataset_name}' already exists at {target_dir} — skipping download.")
+        return
     target_dir.mkdir(parents=True, exist_ok=True)
 
     tmp_dir = (BASE_DIR / f"_tmp_{dataset_name}").resolve()
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.dataset == "all":
-        for ds in DATASET_PATHS.keys():
+        for ds in DATASET_PATHS:
             download_dataset(ds, force=args.force)
     else:
         download_dataset(args.dataset, force=args.force)

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from src import train
 from src.runner import (
@@ -14,7 +15,6 @@ from src.runner import (
     resolve_dataset,
     resolve_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # parser / help
@@ -116,7 +116,7 @@ def test_list_models_and_datasets(capsys: pytest.CaptureFixture) -> None:
 def test_train_runs_end_to_end(
     tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tests.test_model_contract import _main_py, REQUIRED
+    from tests.test_model_contract import REQUIRED, _main_py
 
     monkeypatch.chdir(tmp_path)  # run artifacts land under tmp_path (cwd-based)
     model_dir = tmp_path / "AE"

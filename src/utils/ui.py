@@ -12,8 +12,8 @@ import os
 import shutil
 import sys
 import threading
-import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any, Self
 
 _YELLOW = "\033[33m"
 _BLUE = "\033[34m"
@@ -116,7 +116,7 @@ class Spinner:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    def __enter__(self) -> "Spinner":
+    def __enter__(self) -> Self:
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
         return self
@@ -127,7 +127,7 @@ class Spinner:
             sys.stderr.write(f"\r{self.label} {frame}")
             sys.stderr.flush()
 
-    def __exit__(self, *exc: Any) -> None:
+    def __exit__(self, *exc: object) -> None:
         self._stop.set()
         if self._thread is not None:
             self._thread.join()

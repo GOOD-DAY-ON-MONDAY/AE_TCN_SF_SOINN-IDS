@@ -1,0 +1,37 @@
+# Ruff configuration for the AE_TCN_SFSONIN_IDS project.
+# See https://docs.astral.sh/ruff/configuration/ for details.
+
+target-version = "py310"
+line-length = 88
+
+[lint]
+# Default rule set (E, F, E4/E7/E9, I, UP, B, A, C4, SIM, ...) plus the
+# preview rules the codebase already satisfies. Keep in sync with the
+# rules exercised by `ruff check` in CI.
+extend-select = [
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+    "TRY", # tryceratops
+    "PYI", # flake8-pyi
+]
+
+# The codebase raises exceptions with descriptive, context-rich messages
+# (e.g. naming the exact missing config key). TRY003's "message belongs on
+# the exception class" rule conflicts with that style, so it is disabled.
+ignore = ["TRY003"]
+
+[lint.per-file-ignores]
+# Test files use common test conventions that the strict rules flag:
+# unused unpacked variables, `dict()` kwargs, `zip()` without strict, and
+# tuple concatenation for building method lists.
+"tests/**" = [
+    "B011",  # assert False
+    "B905",  # zip() without strict=
+    "C408",  # dict() call instead of literal
+    "F841",  # unused local variable
+    "RUF005", # tuple concatenation
+    "RUF059", # unused unpacked variable
+]

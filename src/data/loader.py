@@ -1,14 +1,13 @@
 """Load per-flow JSON.gz records into numpy arrays / pandas DataFrames, with
 label encoding and a confusion-matrix plotting helper."""
 
-import os
-import json
 import gzip
+import json
+import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
 from sklearn import metrics
 
 
@@ -194,7 +193,7 @@ def get_training_data(training_folder, annotation_file, feature_dict, max_rows=N
     .values round trip doubled peak memory for no benefit.
     """
     print("\nLoading training set ...")
-    feature_names, ids, X, y, clp = read_dataset(
+    _, ids, X, y, clp = read_dataset(
         training_folder, feature_dict, annotation_file, class_label_pairs=None,
         max_rows=max_rows,
     )
@@ -261,7 +260,7 @@ def plot_confusion_matrix(directory, y_true, y_pred, classes, normalize=False, t
         cm = cm_norm
 
     fig, ax = plt.subplots()
-    im = ax.imshow(cm_norm, interpolation="nearest", cmap=cmap)
+    ax.imshow(cm_norm, interpolation="nearest", cmap=cmap)
     ax.set(
         xticks=np.arange(cm.shape[1]),
         yticks=np.arange(cm.shape[0]),

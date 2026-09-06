@@ -8,8 +8,14 @@ import numpy as np
 import pytest
 
 from src.runner import run_single_seed
-from src.utils.ui import ProgressBar, Spinner, chunked_predict_with_progress, format_error, print_plan
-from tests.test_model_contract import _Cfg, _main_py, _write_model, REQUIRED
+from src.utils.ui import (
+    ProgressBar,
+    Spinner,
+    chunked_predict_with_progress,
+    format_error,
+    print_plan,
+)
+from tests.test_model_contract import REQUIRED, _Cfg, _main_py, _write_model
 
 
 def test_plan_header_lists_model_dataset_seeds_and_layers(capsys: pytest.CaptureFixture) -> None:

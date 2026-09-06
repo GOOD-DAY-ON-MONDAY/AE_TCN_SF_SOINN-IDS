@@ -205,7 +205,7 @@ def _load_yaml_mapping(path: str | Path) -> dict:
     path = Path(path)
     if not path.is_file():
         raise ConfigError(f"Config file not found: '{path}'")
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
     if cfg is None:
         # An empty (or whitespace-only) YAML file contributes no keys.
@@ -225,7 +225,7 @@ def load_config(config_path: str | Path | None = None) -> SimpleNamespace:
     path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
     if not path.is_file():
         raise ConfigError(f"Config file not found: '{path}'")
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         cfg = yaml.safe_load(fh)
     if not isinstance(cfg, dict):
         raise ConfigError(f"Config file '{path}' does not contain a YAML mapping")

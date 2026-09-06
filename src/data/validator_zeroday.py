@@ -29,7 +29,7 @@ from typing import Any
 import matplotlib
 
 matplotlib.use("Agg")  # headless-safe: never opens a window
-import matplotlib.pyplot as plt  # noqa: E402  (backend must be set first)
+import matplotlib.pyplot as plt
 
 from src.utils.config import REPO_ROOT, ConfigError, load_config
 
@@ -141,7 +141,7 @@ def _extract_labels(payload: Any, source: Path) -> list[str]:
         labels = []
         for i, record in enumerate(payload):
             if not isinstance(record, dict):
-                raise RuntimeError(
+                raise TypeError(
                     f"{source}: record {i} is {type(record).__name__}, expected "
                     f"a dict with one of the label keys {_LABEL_KEYS}"
                 )

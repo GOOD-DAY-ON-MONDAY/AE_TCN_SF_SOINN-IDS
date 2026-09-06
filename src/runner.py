@@ -183,7 +183,6 @@ def check_predict_contract(model: Any, X: Any) -> None:
             "side effects (adaptation belongs in partial_fit / "
             "predict_and_adapt)."
         )
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +211,8 @@ RUN_COLUMNS = (
     "timestamp",
 )
 
-from src.utils.ui import chunked_predict_with_progress, phase, yellow as _yellow
+from src.utils.ui import chunked_predict_with_progress, phase
+from src.utils.ui import yellow as _yellow
 
 
 def _peak_mem_gb() -> float:
@@ -338,8 +338,8 @@ def run_zero_day_loop(
 
     results = {
         "zero_day_classes": zero_day_classes,
-        "n_withheld": int(len(X_withheld)),
-        "n_known": int(len(X_known)),
+        "n_withheld": len(X_withheld),
+        "n_known": len(X_known),
         "flagged_unknown_rate": flagged_unknown,
         "retention_prediction_stability": retention,
         "post_teach_known_accuracy": post_accuracy,

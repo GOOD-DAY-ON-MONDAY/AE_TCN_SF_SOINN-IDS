@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from src.runner import RUN_COLUMNS, run_single_seed
-from tests.test_model_contract import _Cfg, _main_py, _write_model, REQUIRED
+from tests.test_model_contract import REQUIRED, _Cfg, _main_py, _write_model
 
 
 @pytest.fixture()
