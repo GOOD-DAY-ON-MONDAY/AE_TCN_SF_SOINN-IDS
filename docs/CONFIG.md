@@ -1,7 +1,6 @@
 # `configs/base_config.yaml` — field-by-field guide
 
-This file explains every field in `configs/base_config.yaml` for someone
-who has never seen it. The config is loaded by `src/utils/config.py`:
+The config is loaded by `src/utils/config.py`:
 
 ```python
 from src.utils.config import load_config
@@ -21,7 +20,7 @@ python -m src.utils.config
 
 ---
 
-## Dataset context (read this first)
+## Dataset context 
 
 Two datasets live under `data/raw/`, and each is **already pre-split by
 the original challenge into four folders** — we never re-split them
@@ -79,7 +78,7 @@ indices, cached arrays) are written.
 
 ---
 
-## ⚠️ Label availability in the test sets — what we found
+## Label availability in the test sets — what we found
 
 **Finding:** ground-truth labels were **not found** for
 `1_test-std_set` or `0_test-challenge_set`. To be fully transparent:
@@ -121,7 +120,7 @@ datasets are heavily imbalanced (e.g. `benign` dominates).
 Controls the shuffling used by the validation split, so everyone gets
 the identical split.
 
-### ⚠️ `splitting.zero_day_classes` — currently empty (TODO)
+### `splitting.zero_day_classes` — currently empty (TODO)
 
 ```yaml
 zero_day_classes:
