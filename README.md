@@ -189,5 +189,4 @@ Test-set ground truths are withheld (`labels_available: false`); evaluation inst
 
 ## Further Reading
 
-- [`CONTEXT.md`](CONTEXT.md) — architectural decisions
 - [`docs/CONFIG.md`](docs/CONFIG.md) — full configuration specification

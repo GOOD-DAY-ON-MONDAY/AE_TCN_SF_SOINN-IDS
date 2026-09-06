@@ -165,10 +165,9 @@ contract doesn't need to change later.
 
 ## CLI Design Language
 
-(See separate `CLI_DESIGN.md` for the full spec — subcommands
 (`train`/`list-models`/`list-datasets`/`show-config`), the pre-run
 plan header, color-with-meaning rules, suggest-the-fix error messages,
 the consistent end-of-run summary table, per-phase progress bars
 during training AND testing, and the visual-polish notes on panels
 and consistent iconography. That file's content is unchanged by this
-round of decisions and still applies as-is.)
+round of decisions and still applies as-is.
