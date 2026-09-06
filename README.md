@@ -74,7 +74,7 @@ python3 -m venv .venv
 .venv/bin/python -m src.train list-models     # List runnable model directories
 .venv/bin/python -m src.train list-datasets   # List supported datasets
 .venv/bin/python -m src.train show-config     # Inspect the 3-layer merged config
-.venv/bin/python -m src.train builder         # Interactive Claude-style REPL shell
+.venv/bin/python -m src.train builder         # Interactive REPL shell
 ```
 
 ### Interactive `train` form (inside the builder shell)
