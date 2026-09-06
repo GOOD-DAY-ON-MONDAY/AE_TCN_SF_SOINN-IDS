@@ -192,3 +192,223 @@ def check_predict_contract(model: Any, X: Any) -> None:
             "predict_and_adapt)."
         )
     return None
+
+
+# ---------------------------------------------------------------------------
+# Single-seed tracer run (ticket 05)
+# ---------------------------------------------------------------------------
+
+REPORTS_DIR = REPO_ROOT / "reports" / "comparison_results"
+ALL_RUNS_CSV = REPORTS_DIR / "all_runs.csv"
+
+# Single source of truth for the CSV/metrics column list (ticket 05).
+RUN_COLUMNS = (
+    "model",
+    "dataset",
+    "seed",
+    "accuracy",
+    "precision",
+    "recall",
+    "f1",
+    "macro_precision",
+    "macro_recall",
+    "macro_f1",
+    "latency_ms",
+    "peak_mem_gb",
+    "train_time_s",
+    "run_dir",
+    "timestamp",
+)
+
+_YELLOW = "\033[33m"
+_RESET = "\033[0m"
+
+
+def _yellow(msg: str) -> str:
+    return f"{_YELLOW}{msg}{_RESET}"
+
+
+def _peak_mem_gb() -> float:
+    """Process peak RSS in GB, measured by the Runner (never model code)."""
+    import resource
+    import sys
+
+    # ru_maxrss is bytes on macOS, KiB on Linux.
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return peak / 1024**3
+    return peak / (1024**2)
+
+
+def _latency_ms_per_flow(model: Any, X: Any) -> float:
+    import time
+
+    n = max(len(X), 1)
+    start = time.perf_counter()
+    model.predict(X)
+    return (time.perf_counter() - start) * 1000.0 / n
+
+
+def _confusion_plot(cm: Any, run_dir: Path, display_names: list[str]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(cm, cmap="Blues")
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+    n = len(display_names)
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+    ax.set_xticklabels(display_names, rotation=90, fontsize=6)
+    ax.set_yticklabels(display_names, fontsize=6)
+    fig.colorbar(im, ax=ax)
+    fig.tight_layout()
+    fig.savefig(run_dir / "confusion_matrix.png", dpi=150)
+    plt.close(fig)
+
+
+def run_single_seed(
+    model_dir: str | Path,
+    dataset: str,
+    seed: int,
+    cfg: Any,
+    X_train: Any,
+    y_train: Any,
+    X_val: Any,
+    y_val: Any,
+    X_test: Any = None,
+    y_test: Any = None,
+    report_root: str | Path | None = None,
+    csv_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """One full train -> predict -> evaluate cycle (tracer bullet, ticket 05).
+
+    Evaluates on the test split when the seam carries one, otherwise on
+    the val split (test data blocked — see src/data/seam.py). Returns
+    the row dict appended to all_runs.csv.
+    """
+    import csv
+    import json
+    import time
+    from datetime import datetime, timezone
+
+    import numpy as np
+    from sklearn import metrics as skmetrics
+
+    model_dir = Path(model_dir)
+    model = load_model(model_dir, cfg)
+    validate_model(model, model_dir)
+
+    # ---- fit -----------------------------------------------------------
+    t0 = time.perf_counter()
+    model.fit(X_train, y_train, X_val=X_val, y_val=y_val)
+    train_time_s = time.perf_counter() - t0
+
+    # ---- evaluate (test if wired, else val — blocker documented) --------
+    if X_test is not None:
+        X_eval, y_eval = X_test, y_test
+    else:
+        X_eval, y_eval = X_val, y_val
+        print(_yellow("note: test data unavailable (labels_available: false); "
+                      "evaluating on the validation split"))
+
+    y_pred = model.predict(X_eval)
+    check_predict_contract(model, X_eval)
+    y_eval = np.asarray(y_eval).reshape(-1)
+    y_pred = np.asarray(y_pred).reshape(-1)
+
+    ds_cfg = getattr(cfg.data, dataset)
+    raw_map = ds_cfg.class_map
+    # The merged namespace converts mappings to SimpleNamespace; accept both.
+    class_map = dict(vars(raw_map)) if hasattr(raw_map, "__dict__") else dict(raw_map)
+    display_names = sorted(class_map, key=class_map.__getitem__)
+    labels = list(range(len(display_names)))
+
+    # ---- metrics (measured by the Runner) ------------------------------
+    row: dict[str, Any] = {
+        "model": str(model_dir),
+        "dataset": dataset,
+        "seed": seed,
+        "accuracy": skmetrics.accuracy_score(y_eval, y_pred),
+        "precision": skmetrics.precision_score(
+            y_eval, y_pred, average="weighted", zero_division=0
+        ),
+        "recall": skmetrics.recall_score(
+            y_eval, y_pred, average="weighted", zero_division=0
+        ),
+        "f1": skmetrics.f1_score(y_eval, y_pred, average="weighted", zero_division=0),
+        "macro_precision": skmetrics.precision_score(
+            y_eval, y_pred, average="macro", zero_division=0
+        ),
+        "macro_recall": skmetrics.recall_score(
+            y_eval, y_pred, average="macro", zero_division=0
+        ),
+        "macro_f1": skmetrics.f1_score(
+            y_eval, y_pred, average="macro", zero_division=0
+        ),
+        "latency_ms": _latency_ms_per_flow(model, X_eval),
+        "peak_mem_gb": _peak_mem_gb(),
+        "train_time_s": round(train_time_s, 6),
+        "run_dir": "",  # filled below
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+    cm = skmetrics.confusion_matrix(y_eval, y_pred, labels=labels).tolist()
+
+    # ---- artifacts ------------------------------------------------------
+    root = Path(report_root) if report_root is not None else Path.cwd() / "models"
+    resolved = model_dir.resolve()
+    if resolved.is_relative_to(MODELS_ROOT.resolve()):
+        rel = resolved.relative_to(MODELS_ROOT.resolve())
+    else:
+        rel = Path(model_dir.name)
+    run_dir = root / rel / dataset / f"seed_{seed}"
+    if run_dir.exists():
+        print(_yellow(f"overwriting existing run directory: {run_dir}"))
+        import shutil
+
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    (run_dir / "metrics.json").write_text(
+        json.dumps({**row, "run_dir": str(run_dir), "confusion_matrix": cm}, indent=2),
+        encoding="utf-8",
+    )
+    _confusion_plot(np.asarray(cm), run_dir, display_names)
+    model.save(run_dir / "model_artifact")
+    row["run_dir"] = str(run_dir)
+
+    # ---- all_runs.csv ----------------------------------------------------
+    csv_file = (
+        Path(csv_path)
+        if csv_path is not None
+        else Path.cwd() / "reports" / "comparison_results" / "all_runs.csv"
+    )
+    csv_file.parent.mkdir(parents=True, exist_ok=True)
+    new_file = not csv_file.exists()
+    with open(csv_file, "a", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(RUN_COLUMNS))
+        if new_file:
+            writer.writeheader()
+        writer.writerow(row)
+
+    # ---- end-of-run summary table ----------------------------------------
+    _print_summary(row, len(y_eval))
+    return row
+
+
+def _print_summary(row: dict[str, Any], n_eval: int) -> None:
+    print("\n=== Run summary ===")
+    print(f"  model:       {row['model']}")
+    print(f"  dataset:     {row['dataset']}   seed: {row['seed']}")
+    print(f"  eval flows:  {n_eval}")
+    for key in ("accuracy", "precision", "recall", "f1",
+                "macro_precision", "macro_recall", "macro_f1"):
+        print(f"  {key:16s} {row[key]:.4f}")
+    print(f"  {'latency_ms':16s} {row['latency_ms']:.4f}")
+    print(f"  {'peak_mem_gb':16s} {row['peak_mem_gb']:.4f}")
+    print(f"  {'train_time_s':16s} {row['train_time_s']:.4f}")
+    print(f"  run_dir:     {row['run_dir']}")

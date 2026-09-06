@@ -113,16 +113,20 @@ def test_list_models_and_datasets(capsys: pytest.CaptureFixture) -> None:
     assert "not found" in capsys.readouterr().out or True
 
 
-def test_train_stub_runs_end_to_end(
+def test_train_runs_end_to_end(
     tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from tests.test_model_contract import _main_py, REQUIRED
+
+    monkeypatch.chdir(tmp_path)  # run artifacts land under tmp_path (cwd-based)
     model_dir = tmp_path / "AE"
     model_dir.mkdir()
-    (model_dir / "main.py").write_text("")
+    (model_dir / "main.py").write_text(_main_py(REQUIRED))
     code = train.main(["train", "--model", str(model_dir), "--dataset", "netml2020"])
     assert code == 0
-    out = capsys.readouterr().out
-    assert "not yet wired" in out
+    assert "Run summary" in capsys.readouterr().out
+    assert (tmp_path / "models" / "AE" / "netml2020" / "seed_42").is_dir()
+    assert (tmp_path / "reports" / "comparison_results" / "all_runs.csv").is_file()
 
 
 def test_train_bad_model_fails_fast() -> None:

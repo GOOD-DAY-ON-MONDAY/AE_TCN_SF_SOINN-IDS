@@ -69,7 +69,33 @@ def cmd_train(args: argparse.Namespace) -> int:
     print(f"Model:   {model_dir}")
     print(f"Dataset: {dataset}")
     print(f"Seed:    {seed}")
-    print("Run not yet wired (ticket 05): config merged successfully, stopping here.")
+
+    # Real test data is blocked (labels_available: false — ticket 03 /
+    # ready-for-human) and the raw training files are not yet wired into
+    # this path, so the tracer run synthesizes a labeled split with the
+    # configured shape. Swapping in the real loader is the only change
+    # needed once the data-source decision lands.
+    import numpy as np
+
+    from src.data.seam import assemble_run_arrays
+    from src.runner import run_single_seed
+
+    ds_cfg = getattr(cfg.data, dataset)
+    rng = np.random.default_rng(seed)
+    X = rng.normal(size=(200, ds_cfg.feature_dim)).astype(np.float32)
+    y = rng.integers(0, ds_cfg.num_classes, size=200)
+    arrays = assemble_run_arrays(X, y, cfg.splitting.val_split, seed)
+
+    run_single_seed(
+        model_dir=model_dir,
+        dataset=dataset,
+        seed=seed,
+        cfg=cfg,
+        X_train=arrays.X_train,
+        y_train=arrays.y_train,
+        X_val=arrays.X_val,
+        y_val=arrays.y_val,
+    )
     return 0
 
 

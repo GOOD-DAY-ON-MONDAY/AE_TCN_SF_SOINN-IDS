@@ -71,8 +71,30 @@ def _write_model(tmp_path: Path, source: str, name: str = "stub_model") -> Path:
     return model_dir
 
 
+def _make_cfg() -> object:
+    from types import SimpleNamespace
+
+    cm8 = {f"c{i}": i for i in range(8)}
+    cm21 = {f"c{i}": i for i in range(21)}
+    return SimpleNamespace(
+        training=SimpleNamespace(random_seed=42),
+        data=SimpleNamespace(
+            netml2020=SimpleNamespace(
+                class_map=cm21, num_classes=21, feature_dim=121
+            ),
+            cicids2017=SimpleNamespace(
+                class_map=cm8, num_classes=8, feature_dim=121
+            ),
+        ),
+        splitting=SimpleNamespace(val_split=0.15, random_seed=42),
+    )
+
+
 class _Cfg:
-    training = type("T", (), {"random_seed": 42})()
+    """Minimal merged-config stand-in for tests."""
+
+    def __new__(cls) -> object:  # pragma: no cover - thin alias
+        return _make_cfg()
 
 
 REQUIRED = ("fit", "predict", "save")
