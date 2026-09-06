@@ -265,6 +265,105 @@ def _confusion_plot(cm: Any, run_dir: Path, display_names: list[str]) -> None:
     plt.close(fig)
 
 
+# ---------------------------------------------------------------------------
+# Zero-day loop with v1 gating (ticket 08)
+# ---------------------------------------------------------------------------
+
+
+def _cfg_get(obj: Any, key: str, default: Any = None) -> Any:
+    """Read a key from either a SimpleNamespace or a dict-like config node."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def run_zero_day_loop(
+    model: Any,
+    cfg: Any,
+    dataset: str,
+    X_withheld: Any,
+    y_withheld: Any,
+    X_known: Any,
+    y_known: Any,
+    run_dir: str | Path | None = None,
+) -> dict[str, Any] | None:
+    """Zero-day protocol: predict (unknown flag) -> partial_fit -> re-predict.
+
+    Gated (CONTEXT.md Round 2 Q6): executes only when the model declares
+    ``supports_incremental = True`` AND ``splitting.zero_day_classes.<dataset>``
+    is non-empty. Otherwise prints the yellow skip notice and returns None.
+    ``predict_and_adapt`` is NEVER called here (contract-only in v1).
+
+    Returns the recorded results dict (also written to
+    ``<run_dir>/zero_day.json`` when run_dir is given).
+    """
+    import json
+
+    import numpy as np
+
+    zd_cfg = _cfg_get(_cfg_get(cfg, "splitting"), "zero_day_classes")
+    zero_day_classes = list(_cfg_get(zd_cfg, dataset, []) or [])
+
+    if not zero_day_classes:
+        print(_yellow("zero-day loop skipped (no zero-day classes configured "
+                      f"for {dataset})"))
+        return None
+    if not getattr(model, "supports_incremental", False):
+        print(_yellow("zero-day loop skipped (not an incremental model)"))
+        return None
+
+    ds_cfg = _cfg_get(_cfg_get(cfg, "data"), dataset)
+    raw_map = _cfg_get(ds_cfg, "class_map")
+    class_map = dict(vars(raw_map)) if hasattr(raw_map, "__dict__") else dict(raw_map)
+    zd_indices = {class_map[name] for name in zero_day_classes if name in class_map}
+    known_labels = sorted(set(np.asarray(y_known).tolist()) - zd_indices)
+
+    if len(X_withheld) == 0 or len(X_known) == 0:
+        print(_yellow("zero-day loop skipped (no withheld/known samples in "
+                      "the evaluation split)"))
+        return None
+
+    # Step 1: predict on the withheld class — is it flagged unknown?
+    pre_withheld_pred = np.asarray(model.predict(X_withheld))
+    known_label_set = set(known_labels)
+    flagged_unknown = int(np.mean([int(p) not in known_label_set
+                                   for p in pre_withheld_pred]))
+
+    # Retention snapshot on known classes BEFORE teaching.
+    pre_known_pred = np.asarray(model.predict(X_known))
+
+    # Step 2: teach the withheld class (reproducible, seed-driven data).
+    model.partial_fit(X_withheld, y_withheld)
+
+    # Step 3: re-predict known classes to measure retention.
+    post_known_pred = np.asarray(model.predict(X_known))
+    retention = float(
+        np.mean(pre_known_pred == post_known_pred)
+    )  # prediction stability across the teach step
+    post_accuracy = float(np.mean(post_known_pred == np.asarray(y_known)))
+
+    results = {
+        "zero_day_classes": zero_day_classes,
+        "n_withheld": int(len(X_withheld)),
+        "n_known": int(len(X_known)),
+        "flagged_unknown_rate": flagged_unknown,
+        "retention_prediction_stability": retention,
+        "post_teach_known_accuracy": post_accuracy,
+        "used_predict_and_adapt": False,
+    }
+    print(f"zero-day loop: flagged_unknown={flagged_unknown:.2f} "
+          f"retention_stability={retention:.4f} "
+          f"post_teach_accuracy={post_accuracy:.4f}")
+    if run_dir is not None:
+        Path(run_dir).mkdir(parents=True, exist_ok=True)
+        (Path(run_dir) / "zero_day.json").write_text(
+            json.dumps(results, indent=2), encoding="utf-8"
+        )
+    return results
+
+
 def run_single_seed(
     model_dir: str | Path,
     dataset: str,
@@ -376,6 +475,45 @@ def run_single_seed(
     _confusion_plot(np.asarray(cm), run_dir, display_names)
     model.save(run_dir / "model_artifact")
     row["run_dir"] = str(run_dir)
+
+    # ---- zero-day loop (gated, ticket 08) --------------------------------
+    # Samples in the evaluation split whose label belongs to the
+    # configured zero-day classes are "withheld"; the rest are known.
+    # The gate itself (incremental model + non-empty config) lives in
+    # run_zero_day_loop; if the split carries no zero-day-class samples,
+    # the loop self-skips there too.
+    y_eval_arr = np.asarray(y_eval)
+    ds_cfg_zd = getattr(cfg.data, dataset)
+    raw_map_zd = ds_cfg_zd.class_map
+    cmap_zd = (
+        dict(vars(raw_map_zd)) if hasattr(raw_map_zd, "__dict__") else dict(raw_map_zd)
+    )
+    zd_cfg = getattr(cfg.splitting, "zero_day_classes", None)
+    zd_names = list(getattr(zd_cfg, dataset, []) or []) if zd_cfg is not None else []
+    zd_idx = {cmap_zd[n] for n in zd_names if n in cmap_zd}
+    if zd_idx:
+        zd_mask = np.isin(y_eval_arr, list(zd_idx))
+        run_zero_day_loop(
+            model=model,
+            cfg=cfg,
+            dataset=dataset,
+            X_withheld=X_eval[zd_mask],
+            y_withheld=y_eval_arr[zd_mask],
+            X_known=X_eval[~zd_mask],
+            y_known=y_eval_arr[~zd_mask],
+            run_dir=run_dir,
+        )
+    else:
+        run_zero_day_loop(
+            model=model,
+            cfg=cfg,
+            dataset=dataset,
+            X_withheld=X_eval,
+            y_withheld=y_eval_arr,
+            X_known=X_eval,
+            y_known=y_eval_arr,
+            run_dir=run_dir,
+        )
 
     # ---- all_runs.csv ----------------------------------------------------
     csv_file = (
