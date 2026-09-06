@@ -220,12 +220,7 @@ RUN_COLUMNS = (
     "timestamp",
 )
 
-_YELLOW = "\033[33m"
-_RESET = "\033[0m"
-
-
-def _yellow(msg: str) -> str:
-    return f"{_YELLOW}{msg}{_RESET}"
+from src.utils.ui import chunked_predict_with_progress, phase, yellow as _yellow
 
 
 def _peak_mem_gb() -> float:
@@ -302,9 +297,9 @@ def run_single_seed(
     model = load_model(model_dir, cfg)
     validate_model(model, model_dir)
 
-    # ---- fit -----------------------------------------------------------
+    # ---- fit (per-phase progress: indeterminate spinner) ----------------
     t0 = time.perf_counter()
-    model.fit(X_train, y_train, X_val=X_val, y_val=y_val)
+    phase("training", lambda: model.fit(X_train, y_train, X_val=X_val, y_val=y_val))
     train_time_s = time.perf_counter() - t0
 
     # ---- evaluate (test if wired, else val — blocker documented) --------
@@ -315,7 +310,8 @@ def run_single_seed(
         print(_yellow("note: test data unavailable (labels_available: false); "
                       "evaluating on the validation split"))
 
-    y_pred = model.predict(X_eval)
+    # ---- testing phase: chunked predict with a determinate bar ----------
+    y_pred = chunked_predict_with_progress(model, X_eval, label="evaluating")
     check_predict_contract(model, X_eval)
     y_eval = np.asarray(y_eval).reshape(-1)
     y_pred = np.asarray(y_pred).reshape(-1)

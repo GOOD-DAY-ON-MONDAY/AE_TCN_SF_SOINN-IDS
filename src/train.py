@@ -82,9 +82,19 @@ def cmd_train(args: argparse.Namespace) -> int:
         seeds = [int(cfg.training.random_seed)]
     seed = seeds[0]
 
-    print(f"Model:   {model_dir}")
-    print(f"Dataset: {dataset}")
-    print(f"Seed:    {seed}")
+    from src.utils.ui import format_error, print_plan
+
+    model_yaml = Path(model_dir) / "model.yaml"
+    print_plan(
+        model_dir=str(model_dir),
+        dataset=dataset,
+        seeds=seeds,
+        config_layers=[
+            ("configs/base_config.yaml", "always"),
+            ("model.yaml (model dir)", "yes" if model_yaml.is_file() else ""),
+            ("--config", args.config if args.config else ""),
+        ],
+    )
 
     # Real test data is blocked (labels_available: false — ticket 03 /
     # ready-for-human) and the raw training files are not yet wired into
@@ -141,7 +151,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "list-datasets":
             return cmd_list_datasets()
     except RunnerError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        from src.utils.ui import format_error
+
+        print(format_error(str(exc)), file=sys.stderr)
         return 2
     return 1  # unreachable
 
