@@ -12,15 +12,23 @@ DATASET_PATHS = {
 }
 
 def download_dataset(dataset_name: str, force: bool = False):
+    """Sparse-clone the competition repo and copy one dataset into ``data/raw``.
+
+    Args:
+        dataset_name (str): key into ``DATASET_PATHS`` (``netml2020`` or
+            ``cicids2017``).
+        force (bool): re-download even if the target directory already exists.
+
+    Raises:
+        ValueError: ``dataset_name`` is not a known dataset.
+    """
     if dataset_name not in DATASET_PATHS:
         raise ValueError(f"Unknown dataset: {dataset_name}. Choose from {list(DATASET_PATHS.keys())}")
 
-    # Use pathlib for clean path resolution
     target_dir = (BASE_DIR / dataset_name).resolve()
-    
+
     print(f"=== Downloading {dataset_name} from {REPO_URL} ===")
-    
-    # Pathlib methods now work correctly on the Path object
+
     if target_dir.exists() and not force:
         if target_dir.is_dir() and any(target_dir.iterdir()):
             print(f"[SKIP] '{dataset_name}' already exists at {target_dir} — skipping download.")

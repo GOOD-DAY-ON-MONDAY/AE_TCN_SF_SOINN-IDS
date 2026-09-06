@@ -16,14 +16,23 @@ from sklearn import metrics
 
 
 def encode_label(labels, class_label_pairs=None):
-    """
-    Encode string labels into integer class indices.
+    """Encode string labels into integer class indices.
 
-    If class_label_pairs is None, builds a new mapping from the
-    sorted unique labels seen (use this on the training set).
-    If class_label_pairs is provided, reuses it (use this on val/
-    test/zero-day-holdout sets so class indices stay consistent
-    with training).
+    Args:
+        labels (iterable[str]): label strings, one per flow.
+        class_label_pairs (dict[str, int] | None): existing class -> index
+            mapping to reuse (val/test sets, so indices stay consistent with
+            training). If None, a new mapping is built from the sorted unique
+            labels seen (training-set use).
+
+    Returns:
+        tuple[np.ndarray, dict[str, int]]: integer label array (one entry per
+            input label) and the class -> index mapping used.
+
+    Raises:
+        KeyError: a label is missing from ``class_label_pairs`` — a genuinely
+            new/zero-day class must be handled separately, not encoded
+            against the training label set.
     """
     label_list = []
 
@@ -46,16 +55,23 @@ def encode_label(labels, class_label_pairs=None):
 
 
 def one_hot(y_, n_classes=None):
-    
-    """One-hot encode integer label indices."""
-    
+    """One-hot encode integer label indices.
+
+    Args:
+        y_ (np.ndarray): 1-D integer class indices.
+        n_classes (int | None): number of columns; if None, derived as
+            ``max(y_) + 1``.
+
+    Returns:
+        np.ndarray: one-hot matrix of shape ``[len(y_), n_classes]``.
+    """
     if n_classes is None:
         n_classes = int(max(y_)) + 1
     y_ = y_.reshape(len(y_))
     return np.eye(n_classes)[np.array(y_, dtype=np.int32)]
 
 
-def read_json_gz(json_filename, feature_dict):
+def read_json_gz(json_filename, feature_dict, max_rows=None):
     
     """
     Read one .json.gz file of per-flow JSON records and extract the
@@ -65,13 +81,25 @@ def read_json_gz(json_filename, feature_dict):
         sub-indices) or a list of specific indices to take.
         Must be provided explicitly — no hidden default file.
 
+    Memory notes (fix for the previous (n, 2048) float64 preallocation):
+    - Rows are streamed: each parsed JSON dict is processed and released
+      immediately, so all 387k flow dicts are never held at once.
+    - Features are collected into plain Python row lists and converted
+      ONCE at the end into a single float32 array sized to the real
+      maximum feature count (121 for this project), not a 2048-wide
+      float64 buffer (~6.3 GB). float32 is sufficient for flow
+      statistics at this feature scale.
+
     Returns:
-        dataArray      : np.array [n_samples, n_features_selected]
+        dataArray      : np.array [n_samples, n_features_selected] (float32)
         ids            : list of flow IDs, one per row
         feature_header : list of feature column names, in order
     """
     feature_header = []
-    data = []
+    blocks = []  # per-row float32 np arrays: ~0.2 GB total at 387k rows,
+    # vs ~2 GB for a list of Python-float lists (boxed floats + list
+    # overhead) — this is the difference between fitting and OOM on 8 GB.
+    ids = []
     skipped_lines = []
 
     with gzip.open(json_filename, "rb") as jj:
@@ -82,56 +110,57 @@ def read_json_gz(json_filename, feature_dict):
             if not raw:
                 break
             try:
-                sample = json.loads(raw.decode("utf-8"))
-                data.append(sample)
+                flow = json.loads(raw.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError):
                 skipped_lines.append(line_no)
+                continue
+
+            ids.append(flow["id"])
+            row = []
+            # (max_rows cap checked after the row is parsed, below)
+            for feature in sorted(feature_dict.keys()):
+                if feature not in flow:
+                    continue
+                extracted = flow[feature]
+
+                if isinstance(extracted, list):
+                    if len(extracted) == 0:
+                        continue
+                    if isinstance(extracted[0], dict):
+                        # e.g. SPLT / byte_dist stored as dict — not handled here
+                        continue
+                    indices = range(len(extracted)) if feature_dict[feature] == -1 else feature_dict[feature]
+                    for j in indices:
+                        row.append(extracted[j])
+                        col_name = f"{feature}_{j}"
+                        if col_name not in feature_header:
+                            feature_header.append(col_name)
+                elif isinstance(extracted, str):
+                    continue  # categorical/string fields skipped, as in original
+                else:
+                    row.append(extracted)
+                    if feature not in feature_header:
+                        feature_header.append(feature)
+            blocks.append(np.asarray(row, dtype=np.float32))
+            if max_rows is not None and len(blocks) >= max_rows:
+                print(f"Stopped early at max_rows={max_rows} in {json_filename}.")
+                break
 
     if skipped_lines:
         print(f"Skipped {len(skipped_lines)} unparseable line(s) in {json_filename}.")
 
-    if not data:
-        return np.zeros((0, 0)), [], []
+    if not blocks:
+        return np.zeros((0, 0), dtype=np.float32), [], []
 
-    data_array = np.zeros((len(data), 2048))
-    ids = []
-    col_counter_final = 0
+    col_counter_final = max(b.shape[0] for b in blocks)
+    data_array = np.zeros((len(blocks), col_counter_final), dtype=np.float32)
+    for i, b in enumerate(blocks):
+        data_array[i, : b.shape[0]] = b
 
-    for i, flow in enumerate(data):
-        ids.append(flow["id"])
-        col_counter = 0
-        for feature in sorted(feature_dict.keys()):
-            if feature not in flow:
-                continue
-            extracted = flow[feature]
-
-            if isinstance(extracted, list):
-                if len(extracted) == 0:
-                    continue
-                if isinstance(extracted[0], dict):
-                    # e.g. SPLT / byte_dist stored as dict — not handled here
-                    continue
-                indices = range(len(extracted)) if feature_dict[feature] == -1 else feature_dict[feature]
-                for j in indices:
-                    data_array[i, col_counter] = extracted[j]
-                    col_name = f"{feature}_{j}"
-                    if col_name not in feature_header:
-                        feature_header.append(col_name)
-                    col_counter += 1
-            elif isinstance(extracted, str):
-                continue  # categorical/string fields skipped, as in original
-            else:
-                data_array[i, col_counter] = extracted
-                if feature not in feature_header:
-                    feature_header.append(feature)
-                col_counter += 1
-
-        col_counter_final = max(col_counter_final, col_counter)
-
-    return data_array[:, :col_counter_final], ids, feature_header
+    return data_array, ids, feature_header
 
 
-def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label_pairs=None):
+def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label_pairs=None, max_rows=None):
     """
     Walk dataset_folder for .json.gz files, extract features via
     feature_dict, and optionally attach labels from annotation_file.
@@ -152,7 +181,7 @@ def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label
             if not f.endswith(".json.gz"):
                 continue
             print(f"Reading {f}")
-            d, ids, f_names = read_json_gz(os.path.join(root, f), feature_dict)
+            d, ids, f_names = read_json_gz(os.path.join(root, f), feature_dict, max_rows=max_rows)
 
             if len(f_names) > len(feature_names):
                 feature_names = f_names
@@ -173,14 +202,24 @@ def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label
     return feature_names, all_ids, data_array, None, class_label_pairs
 
 
-def get_training_data(training_folder, annotation_file, feature_dict):
-    """Load training data as (Xtrain, y_train, class_label_pairs, ids)."""
+def get_training_data(training_folder, annotation_file, feature_dict, max_rows=None):
+    """Load training data as (Xtrain, y_train, class_label_pairs, ids).
+
+    max_rows: optional cap on rows read (tracer-bullet runs on the 8 GB
+    dev machine read a small sample; None = full file).
+
+    Returns the raw numpy feature array directly (float32). The previous
+    numpy -> pandas DataFrame -> .values round trip doubled peak memory
+    for nothing: the DataFrame was constructed and immediately converted
+    back, with no named-column access or other pandas-specific use.
+    Callers receive an ndarray either way (df.values was an ndarray).
+    """
     print("\nLoading training set ...")
     feature_names, ids, X, y, clp = read_dataset(
-        training_folder, feature_dict, annotation_file, class_label_pairs=None
+        training_folder, feature_dict, annotation_file, class_label_pairs=None,
+        max_rows=max_rows,
     )
-    df = pd.DataFrame(X, columns=feature_names)
-    return df.values, y, clp, ids
+    return X, y, clp, ids
 
 
 def get_labeled_eval_data(eval_folder, annotation_file, feature_dict, class_label_pairs):
@@ -202,7 +241,23 @@ def get_labeled_eval_data(eval_folder, annotation_file, feature_dict, class_labe
 
 
 def plot_confusion_matrix(directory, y_true, y_pred, classes, normalize=False, title=None, cmap=plt.cm.Blues):
-    """Compute and save a confusion matrix plot. Unchanged in behavior from the original."""
+    """Compute and save a confusion-matrix plot with TPR/FAR (binary) or
+    F1/mAP (multi-class) in the title.
+
+    Args:
+        directory (str): output directory; the figure is written to
+            ``<directory>/CM.png``.
+        y_true (array-like): ground-truth integer labels.
+        y_pred (array-like): predicted integer labels.
+        classes (list[str]): display names, indexed by class index.
+        normalize (bool): if True, plot row-normalized counts instead of raw.
+        title (str | None): figure title; auto-generated when None.
+        cmap (matplotlib colormap): cell coloring (default ``plt.cm.Blues``).
+
+    Returns:
+        tuple[matplotlib.axes.Axes, np.ndarray]: the plot axes and the
+            (possibly normalized) confusion matrix.
+    """
     cm = metrics.confusion_matrix(y_true, y_pred)
     n_classes = cm.shape[0]
 

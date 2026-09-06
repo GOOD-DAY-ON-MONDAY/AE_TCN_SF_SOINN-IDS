@@ -61,7 +61,17 @@ _LABEL_FILE_HINTS = ("annotation", "label")
 
 
 def _read_json_payload(path: Path) -> Any:
-    """Read a .json or .json.gz file, falling back to JSON-lines."""
+    """Read a .json or .json.gz file, falling back to JSON-lines.
+
+    Args:
+        path (Path): file to read (extension decides gzip).
+
+    Returns:
+        Any: the parsed payload (list, dict, or scalar).
+
+    Raises:
+        RuntimeError: the file is neither valid JSON nor JSON-lines.
+    """
     opener = gzip.open if path.name.endswith(".gz") else open
     with opener(path, "rt", encoding="utf-8") as fh:
         text = fh.read()
@@ -79,7 +89,19 @@ def _read_json_payload(path: Path) -> Any:
 
 
 def _find_annotation_file(annotations_path: Path, dataset_name: str) -> Path:
-    """Locate the label file inside (or at) data.<ds>.training_annotations."""
+    """Locate the label file inside (or at) data.<ds>.training_annotations.
+
+    Args:
+        annotations_path (Path): config path to the annotations (file or dir).
+        dataset_name (str): dataset key, used in error messages.
+
+    Returns:
+        Path: the single unambiguous label file.
+
+    Raises:
+        FileNotFoundError: the path is missing or the directory is empty.
+        RuntimeError: multiple candidate label files make the choice ambiguous.
+    """
     if not annotations_path.exists():
         raise FileNotFoundError(
             f"data.{dataset_name}.training_annotations does not exist: "
@@ -111,7 +133,19 @@ def _find_annotation_file(annotations_path: Path, dataset_name: str) -> Path:
 
 
 def _extract_labels(payload: Any, source: Path) -> list[str]:
-    """Flatten a parsed annotation payload into a plain list of label strings."""
+    """Flatten a parsed annotation payload into a plain list of label strings.
+
+    Args:
+        payload (Any): parsed JSON payload (list of labels/records or an
+            id -> label mapping).
+        source (Path): originating file, used in error messages.
+
+    Returns:
+        list[str]: one label string per flow, in payload order.
+
+    Raises:
+        RuntimeError: a record carries no recognizable label key.
+    """
     if isinstance(payload, list):
         if all(isinstance(item, str) for item in payload):
             return list(payload)
@@ -183,6 +217,7 @@ def count_training_classes(dataset_name: str, ds_cfg: Any) -> tuple[Counter[str]
 
 
 def _first_record(payload: Any) -> Any:
+    """Return the first record of a payload (None if empty/scalar)."""
     if isinstance(payload, list):
         return payload[0] if payload else None
     if isinstance(payload, dict):
@@ -191,6 +226,7 @@ def _first_record(payload: Any) -> Any:
 
 
 def _record_has_label(record: Any) -> bool:
+    """Return True if a record is a bare label string or has a label key."""
     if isinstance(record, str):
         return True  # a bare string entry is itself a label
     if isinstance(record, dict):
@@ -199,6 +235,7 @@ def _record_has_label(record: Any) -> bool:
 
 
 def _record_keys(record: Any) -> str:
+    """Return a record's keys (or type name) for error/diagnostic output."""
     if isinstance(record, dict):
         return ", ".join(sorted(record))
     return type(record).__name__ if record is not None else "None"

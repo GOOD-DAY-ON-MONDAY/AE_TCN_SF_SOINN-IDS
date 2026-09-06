@@ -25,6 +25,7 @@ _RESET = "\033[0m"
 
 
 def color_enabled() -> bool:
+    """Return True when ANSI color should be used (TTY and NO_COLOR unset)."""
     return sys.stdout.isatty() and not os.environ.get("NO_COLOR")
 
 
@@ -38,14 +39,17 @@ def yellow(msg: str) -> str:
 
 
 def dim(msg: str) -> str:
+    """Wrap ``msg`` in dim styling (returns unchanged if color is off)."""
     return _paint(_DIM, msg)
 
 
 def bold(msg: str) -> str:
+    """Wrap ``msg`` in bold styling (returns unchanged if color is off)."""
     return _paint(_BOLD, msg)
 
 
 def green(msg: str) -> str:
+    """Wrap ``msg`` in green styling (returns unchanged if color is off)."""
     return _paint(_GREEN, msg)
 
 
@@ -165,4 +169,5 @@ def phase(label: str, fn: Callable[[], Any]) -> Any:
 
 
 def terminal_width() -> int:
+    """Return the terminal width in columns (falls back to 80)."""
     return shutil.get_terminal_size((80, 24)).columns

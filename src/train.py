@@ -19,6 +19,12 @@ from src.utils.config import load_merged_config
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser with the ``train``, ``show-config``, ``list-models``
+    and ``list-datasets`` subcommands.
+
+    Returns:
+        argparse.ArgumentParser: configured top-level parser.
+    """
     parser = argparse.ArgumentParser(
         prog="python -m src.train",
         description="Model-comparison Runner (netml-cl).",
@@ -58,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=argparse.SUPPRESS,
     )
+    p_train.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Debugging/smoke-test only: read only the first N rows of the "
+        "training data before fitting. Defaults to off (full dataset); "
+        "never use for real experiments.",
+    )
 
     p_show = sub.add_parser(
         "show-config",
@@ -87,6 +101,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_train(args: argparse.Namespace) -> int:
+    """Execute the ``train`` subcommand: load data, run the model, write reports.
+
+    Args:
+        args (argparse.Namespace): parsed CLI arguments (``model``, ``dataset``,
+            ``config``, ``seeds``/``seed``, ``limit``).
+
+    Returns:
+        int: process exit code (0 on success).
+    """
     model_dir = resolve_model(args.model)
     dataset = resolve_dataset(args.dataset)  # argparse choices already gate this
 
@@ -121,19 +144,73 @@ def cmd_train(args: argparse.Namespace) -> int:
     )
 
     # Real test data is blocked (labels_available: false — ticket 03 /
-    # ready-for-human) and the raw training files are not yet wired into
-    # this path, so the tracer run synthesizes a labeled split with the
-    # configured shape. Swapping in the real loader is the only change
-    # needed once the data-source decision lands.
-    import numpy as np
+    # ready-for-human), so evaluation falls back to the val split held
+    # out of the real training set by the seam.
+    import json as _json
 
+    from src.data.loader import get_training_data
     from src.data.seam import assemble_run_arrays
     from src.runner import run_seeds
 
     ds_cfg = getattr(cfg.data, dataset)
-    rng = np.random.default_rng(seed)
-    X = rng.normal(size=(200, ds_cfg.feature_dim)).astype(np.float32)
-    y = rng.integers(0, ds_cfg.num_classes, size=200)
+    with open("configs/feature_meta.json") as fh:
+        feature_dict = _json.load(fh)
+    # read_dataset() walks a FOLDER of .json.gz files; the config stores the
+    # training file path, so use its parent dir (raw_dir would also sweep
+    # the test-challenge/test-std sets, which must stay out of training).
+    training_folder = str(Path(ds_cfg.training_set).parent)
+    # Tracer-bullet mode: the raw file is grouped by class, so a head cap
+    # would miss classes; load full (streamed float32, ~0.44 GB peak) and
+    # subsample deterministically per seed for a fast end-to-end run.
+    # Raise/remove _sample_rows for full-scale training.
+    _sample_rows = 50000
+    limit = getattr(args, "limit", None)
+    if limit is not None:
+        X, y, _, _ = get_training_data(
+            training_folder,
+            ds_cfg.training_annotations,
+            feature_dict,
+            max_rows=limit,
+        )
+        # The raw file is grouped by class, so a plain head cap can yield a
+        # single class (unfittable). Re-read with a growing cap until at
+        # least 2 classes appear, then keep the first `limit` rows PER CLASS
+        # (deterministic, no seed dependence, still a mid-stream early stop).
+        retries = 0
+        while y is not None and len(set(y.tolist())) < 2 and retries < 6:
+            retries += 1
+            _cap = min(limit * (4**retries), 10**9)
+            print(
+                f"--limit: first {limit} rows contain a single class "
+                f"(file is class-grouped); re-reading with cap {_cap} ..."
+            )
+            X, y, _, _ = get_training_data(
+                training_folder, ds_cfg.training_annotations, feature_dict,
+                max_rows=_cap,
+            )
+        if y is not None and len(set(y.tolist())) >= 2:
+            import numpy as _np
+
+            _keep = _np.zeros(len(y), dtype=bool)
+            for _cls in set(y.tolist()):
+                _idx = _np.flatnonzero(y == _cls)[:limit]
+                _keep[_idx] = True
+            X, y = X[_keep], y[_keep]
+        print(f"--limit: using {len(X)} row(s) of training data (debug run, first {limit}/class)")
+    else:
+        X, y, _, _ = get_training_data(
+            training_folder,
+            ds_cfg.training_annotations,
+            feature_dict,
+        )
+        if len(X) > _sample_rows:
+            import numpy as _np
+
+            _rng = _np.random.default_rng(seed)
+            _idx = _np.sort(_rng.choice(len(X), size=_sample_rows, replace=False))
+            X, y = X[_idx], y[_idx]
+            print(f"tracer run: sampled {_sample_rows} of 387268 loaded rows (seed {seed})")
+
     arrays = assemble_run_arrays(X, y, cfg.splitting.val_split, seed)
 
     run_seeds(
@@ -150,6 +227,15 @@ def cmd_train(args: argparse.Namespace) -> int:
 
 
 def cmd_show_config(args: argparse.Namespace) -> int:
+    """Execute the ``show-config`` subcommand: print the merged config.
+
+    Args:
+        args (argparse.Namespace): parsed CLI arguments (``model``, ``dataset``,
+            ``config``).
+
+    Returns:
+        int: process exit code (0 on success).
+    """
     from src.utils.config import (
         DEFAULT_CONFIG_PATH,
         _load_yaml_mapping,
@@ -202,6 +288,15 @@ def cmd_show_config(args: argparse.Namespace) -> int:
 def _record_base_sources(
     mapping: Mapping, sources: dict[str, str], label: str, prefix: str = ""
 ) -> None:
+    """Record the source layer for every leaf key of a merged-config mapping.
+
+    Args:
+        mapping (Mapping): nested config mapping to walk.
+        sources (dict[str, str]): dotted key path -> layer label; entries are
+            only added for paths not already present (later layers win).
+        label (str): label recorded for this layer (e.g. ``"base"``).
+        prefix (str): dotted path prefix used during recursion.
+    """
     for key, value in mapping.items():
         path = f"{prefix}{key}"
         if isinstance(value, Mapping):
@@ -235,6 +330,11 @@ def _yaml_with_sources(merged: dict, sources: dict[str, str]) -> str:
 
 
 def cmd_list_models() -> int:
+    """Print every runnable model directory found under ``models/``.
+
+    Returns:
+        int: process exit code (0 on success).
+    """
     models = discover_models()
     if not models:
         print("No runnable model directories found under models/ (need main.py).")
@@ -245,12 +345,26 @@ def cmd_list_models() -> int:
 
 
 def cmd_list_datasets() -> int:
+    """Print the valid dataset names, one per line.
+
+    Returns:
+        int: process exit code (0 on success).
+    """
     for name in VALID_DATASETS:
         print(name)
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse ``argv``, dispatch the chosen subcommand, and format errors.
+
+    Args:
+        argv (list[str] | None): command-line arguments; ``None`` uses ``sys.argv``.
+
+    Returns:
+        int: process exit code (0 success, 2 on RunnerError, 1 if dispatch
+            falls through).
+    """
     args = build_parser().parse_args(argv)
     try:
         if args.command == "train":

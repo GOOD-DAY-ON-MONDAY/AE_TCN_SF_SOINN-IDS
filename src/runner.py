@@ -224,7 +224,11 @@ from src.utils.ui import chunked_predict_with_progress, phase, yellow as _yellow
 
 
 def _peak_mem_gb() -> float:
-    """Process peak RSS in GB, measured by the Runner (never model code)."""
+    """Return the process peak RSS in GB, measured by the Runner (never model code).
+
+    Returns:
+        float: peak memory usage in gigabytes.
+    """
     import resource
     import sys
 
@@ -236,6 +240,15 @@ def _peak_mem_gb() -> float:
 
 
 def _latency_ms_per_flow(model: Any, X: Any) -> float:
+    """Measure mean wall-clock predict latency per flow.
+
+    Args:
+        model (Any): model implementing ``predict(X)``.
+        X (Any): evaluation array to predict on.
+
+    Returns:
+        float: elapsed milliseconds per flow.
+    """
     import time
 
     n = max(len(X), 1)
@@ -245,6 +258,13 @@ def _latency_ms_per_flow(model: Any, X: Any) -> float:
 
 
 def _confusion_plot(cm: Any, run_dir: Path, display_names: list[str]) -> None:
+    """Render a labeled confusion-matrix heatmap headlessly.
+
+    Args:
+        cm (Any): square confusion-matrix array (counts or normalized).
+        run_dir (Path): directory the ``confusion_matrix.png`` is written to.
+        display_names (list[str]): class display names, indexed by class index.
+    """
     import matplotlib
 
     matplotlib.use("Agg")
@@ -535,6 +555,12 @@ def run_single_seed(
 
 
 def _print_summary(row: dict[str, Any], n_eval: int) -> None:
+    """Print the end-of-run summary block from a run row.
+
+    Args:
+        row (dict[str, Any]): run row (metrics + metadata).
+        n_eval (int): number of evaluation flows.
+    """
     print("\n=== Run summary ===")
     print(f"  model:       {row['model']}")
     print(f"  dataset:     {row['dataset']}   seed: {row['seed']}")
