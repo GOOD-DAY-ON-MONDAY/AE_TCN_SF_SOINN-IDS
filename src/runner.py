@@ -1,18 +1,12 @@
-"""Runner-side logic for the model-comparison Runner.
+"""Runner-side logic: model discovery, dataset registry, model loading/contract
+validation, and nearest-match error messages. Kept separate from the CLI layer
+(``src/train.py``) per CONTEXT.md.
 
-Owns model discovery, dataset registry, model loading/contract
-validation (ticket 04), and nearest-match error messages. Kept
-separate from ``src/train.py`` (the CLI layer) per CONTEXT.md.
-
-Model contract (CONTEXT.md Round 1 Q1 / Round 2 Q1-Q4):
-- ``main.py`` in the model dir exposes ``create_model(cfg)`` where
-  ``cfg`` is the fully merged config namespace.
-- Required methods: ``fit(X, y, X_val=None, y_val=None)`` (re-callable
-  on the same object without resetting it), ``predict(X)`` returning
-  hard integer class indices (pure read), ``save(path)``.
-- ``supports_incremental = True`` additionally requires
-  ``partial_fit(X, y)`` and ``predict_and_adapt(X)`` (contract-only in
-  v1 — demo use, never the scientific loop).
+Model contract: ``main.py`` exposes ``create_model(cfg)``; models implement
+``fit(X, y, X_val=None, y_val=None)`` (re-callable), ``predict(X)`` returning
+hard integer class indices (pure read), and ``save(path)``. Models declaring
+``supports_incremental = True`` must also implement ``partial_fit(X, y)`` and
+``predict_and_adapt(X)`` (contract-only in v1).
 """
 
 from __future__ import annotations
@@ -67,11 +61,10 @@ def discover_models(models_root: str | Path | None = None) -> list[Path]:
 
 
 def resolve_model(model_path: str | Path) -> Path:
-    """Validate that ``model_path`` is a directory with an entry file.
+    """Validate ``model_path`` is a directory with an entry file.
 
     The directory path is the model's identity/display name. A typo'd or
-    nonexistent path fails fast with the nearest matching model directory
-    suggested.
+    nonexistent path fails fast, suggesting the nearest matching model.
     """
     path = Path(model_path)
     if path.is_dir() and (path / ENTRY_FILE).is_file():
@@ -167,8 +160,7 @@ def validate_model(model: Any, origin: str = "<model>") -> Any:
 def check_predict_contract(model: Any, X: Any) -> None:
     """Post-fit runtime checks: hard integer indices + pure read.
 
-    Called by the run loop (ticket 05) on the val/test arrays before
-    metrics are computed.
+    Called on the val/test arrays before metrics are computed.
     """
     out1 = model.predict(X)
     out2 = model.predict(X)
@@ -224,11 +216,7 @@ from src.utils.ui import chunked_predict_with_progress, phase, yellow as _yellow
 
 
 def _peak_mem_gb() -> float:
-    """Return the process peak RSS in GB, measured by the Runner (never model code).
-
-    Returns:
-        float: peak memory usage in gigabytes.
-    """
+    """Return the process peak RSS in GB (measured by the Runner, never model code)."""
     import resource
     import sys
 
@@ -240,15 +228,7 @@ def _peak_mem_gb() -> float:
 
 
 def _latency_ms_per_flow(model: Any, X: Any) -> float:
-    """Measure mean wall-clock predict latency per flow.
-
-    Args:
-        model (Any): model implementing ``predict(X)``.
-        X (Any): evaluation array to predict on.
-
-    Returns:
-        float: elapsed milliseconds per flow.
-    """
+    """Return mean wall-clock predict latency per flow, in milliseconds."""
     import time
 
     n = max(len(X), 1)
@@ -258,13 +238,7 @@ def _latency_ms_per_flow(model: Any, X: Any) -> float:
 
 
 def _confusion_plot(cm: Any, run_dir: Path, display_names: list[str]) -> None:
-    """Render a labeled confusion-matrix heatmap headlessly.
-
-    Args:
-        cm (Any): square confusion-matrix array (counts or normalized).
-        run_dir (Path): directory the ``confusion_matrix.png`` is written to.
-        display_names (list[str]): class display names, indexed by class index.
-    """
+    """Render a labeled confusion-matrix heatmap to ``<run_dir>/confusion_matrix.png``."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -311,13 +285,11 @@ def run_zero_day_loop(
 ) -> dict[str, Any] | None:
     """Zero-day protocol: predict (unknown flag) -> partial_fit -> re-predict.
 
-    Gated (CONTEXT.md Round 2 Q6): executes only when the model declares
-    ``supports_incremental = True`` AND ``splitting.zero_day_classes.<dataset>``
-    is non-empty. Otherwise prints the yellow skip notice and returns None.
-    ``predict_and_adapt`` is NEVER called here (contract-only in v1).
-
-    Returns the recorded results dict (also written to
-    ``<run_dir>/zero_day.json`` when run_dir is given).
+    Gated on ``supports_incremental = True`` and a non-empty
+    ``splitting.zero_day_classes.<dataset>``; otherwise prints a skip notice and
+    returns None. ``predict_and_adapt`` is never called (contract-only in v1).
+    Returns the results dict, also written to ``<run_dir>/zero_day.json`` when
+    ``run_dir`` is given.
     """
     import json
 
@@ -398,11 +370,11 @@ def run_single_seed(
     report_root: str | Path | None = None,
     csv_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """One full train -> predict -> evaluate cycle (tracer bullet, ticket 05).
+    """One full train -> predict -> evaluate cycle.
 
-    Evaluates on the test split when the seam carries one, otherwise on
-    the val split (test data blocked — see src/data/seam.py). Returns
-    the row dict appended to all_runs.csv.
+    Evaluates on the test split when the seam carries one, otherwise on the val
+    split (test data blocked — see src/data/seam.py). Returns the row dict
+    appended to all_runs.csv.
     """
     import csv
     import json
@@ -555,12 +527,7 @@ def run_single_seed(
 
 
 def _print_summary(row: dict[str, Any], n_eval: int) -> None:
-    """Print the end-of-run summary block from a run row.
-
-    Args:
-        row (dict[str, Any]): run row (metrics + metadata).
-        n_eval (int): number of evaluation flows.
-    """
+    """Print the end-of-run summary block from a run row."""
     print("\n=== Run summary ===")
     print(f"  model:       {row['model']}")
     print(f"  dataset:     {row['dataset']}   seed: {row['seed']}")
@@ -596,8 +563,8 @@ AGGREGATED_COLUMNS = (
 def aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, tuple[float, float]]:
     """Aggregate run rows into per-metric (mean, std) pairs.
 
-    Std is the population standard deviation (ddof=0); a single row
-    yields std 0.0. Non-numeric columns are not aggregated.
+    Uses population std (ddof=0); a single row yields std 0.0. Non-numeric
+    columns are not aggregated.
     """
     if not rows:
         raise RunnerError("aggregate_rows() called with no run rows.")
@@ -629,11 +596,10 @@ def run_seeds(
     report_root: str | Path | None = None,
     csv_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
-    """One Run per seed, aggregated into mean ± std (ticket 06).
+    """One Run per seed, aggregated into mean ± std.
 
-    Returns the per-seed row list; aggregation is printed. Rerunning a
-    seed overwrites its ``seed_<n>/`` directory (notice printed by
-    ``run_single_seed``).
+    Returns the per-seed row list; aggregation is printed. Rerunning a seed
+    overwrites its ``seed_<n>/`` directory.
     """
     if not seeds:
         raise RunnerError("--seeds received no values; give at least one seed.")

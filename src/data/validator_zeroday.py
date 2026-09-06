@@ -1,30 +1,19 @@
-"""Data validation for the AE_TCN_SFSONIN_IDS project.
+"""Validate raw datasets and produce per-class count reports for picking
+zero_day_classes.
 
-Validates the raw datasets described in configs/base_config.yaml and
-produces the per-class count reports needed to pick zero_day_classes:
+Counts flows per class in each dataset's training annotations; scans
+test_std_dir / test_challenge_dir for label files and reports whether
+ground-truth labels appear available (the pending check behind
+``labels_available: false``); writes reports/data/<dataset>_data_report.png
+(log-scale bar chart) and reports/data/class_counts.csv (rarest first).
 
-  * Counts flows per class in each dataset's training annotations.
-  * Scans test_std_dir / test_challenge_dir for label/annotation files
-    and prints whether ground-truth labels appear to be available —
-    this is the pending check referenced by ``labels_available: false``
-    in configs/base_config.yaml and docs/CONFIG.md.
-  * Writes reports/data/<dataset>_data_report.png (bar chart with a
-    log-scale y-axis so rare attack classes stay visible next to the
-    heavy benign traffic) and reports/data/class_counts.csv (exact
-    counts, rarest first, to pick the 3-5 zero_day_classes).
+The annotation loader is intentionally defensive — the raw payload shape is
+unverified, so it handles JSON / gzipped JSON / JSON-lines as a list of label
+strings, a list of dicts with a label-ish key, or an id -> label mapping.
+Adjust ``_LABEL_KEYS`` / ``_extract_labels`` if the real files differ.
 
-NOTE ON ANNOTATION FORMATS: the raw annotation payload has not been
-inspected yet, so the loader below is intentionally defensive. It
-handles JSON / gzipped JSON / JSON-lines payloads shaped as a list of
-label strings, a list of dicts with a label-ish key, or a mapping of
-id -> label. If the real files use a different shape, adjust
-``_LABEL_KEYS`` / ``_extract_labels`` — everything else stays the same.
-
-Usage (from the repo root):
-    python -m src.data.validator_zeroday
-
-Exit code 0 = both datasets validated; 1 = at least one dataset could
-not be validated (e.g. raw data not downloaded yet).
+Usage: ``python -m src.data.validator_zeroday``. Exit 0 = both datasets
+validated; 1 = at least one could not be validated.
 """
 
 from __future__ import annotations
@@ -244,8 +233,7 @@ def _record_keys(record: Any) -> str:
 def check_test_label_availability(dataset_name: str, ds_cfg: Any) -> None:
     """Print whether test_std/test_challenge contain label/annotation files.
 
-    This is the record-level check that configs/base_config.yaml deferred:
-    if label files (or label-bearing records) turn up here, flip that
+    If label files (or label-bearing records) turn up here, flip that
     dataset's ``labels_available`` to true in configs/base_config.yaml.
     """
     for attr in ("test_std_dir", "test_challenge_dir"):

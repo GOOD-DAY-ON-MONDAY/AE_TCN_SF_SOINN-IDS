@@ -1,20 +1,14 @@
-"""Minimal SVM baseline — tracer-bullet model for the Runner harness only.
+"""Minimal SVM baseline — tracer-bullet model for the Runner harness.
 
-Implements exactly the v1 contract from spec.md:
-- create_model(cfg) factory
-- fit(X, y, X_val=None, y_val=None) — wraps sklearn.svm.SVC; val data ignored
-- predict(X) — hard integer class indices, pure read
-- save(path) — joblib serialization
+Implements the v1 contract: ``create_model(cfg)`` factory, ``fit(X, y, X_val=None,
+y_val=None)`` (val ignored), ``predict(X)`` (hard integer indices, pure read), and
+``save(path)`` (joblib). Not incremental: no ``supports_incremental``,
+``partial_fit``, or ``predict_and_adapt``.
 
-Deliberately NOT implemented: supports_incremental, partial_fit,
-predict_and_adapt (SVM is a non-incremental baseline per spec.md).
-
-Choice note: LinearSVC (wrapped with StandardScaler in a Pipeline), NOT
-kernel SVC. On the real netml2020 training set (~387k rows), sklearn.svm.SVC
-is infeasible: libsvm's kernel matrix scales O(n^2) in memory (~100+ GB).
-LinearSVC (liblinear) scales ~linearly and is the correct SVM baseline at
-this data size, per the task's explicit allowance. C is read from cfg if
-present (cfg.model.<key> or cfg.<key>), else the sklearn default 1.0.
+Uses LinearSVC (liblinear) wrapped in a StandardScaler pipeline, not kernel SVC:
+libsvm's kernel matrix scales O(n^2) in memory (~100+ GB on the ~387k-row
+netml2020 set), while liblinear scales ~linearly. C is read from cfg
+(``cfg.model.<key>`` or ``cfg.<key>``) if present, else the sklearn default 1.0.
 """
 
 from __future__ import annotations
@@ -64,7 +58,7 @@ class SVMModel:
 
     def fit(self, X, y, X_val=None, y_val=None):
         # X_val/y_val accepted per the uniform signature; SVM has no early
-        # stopping here, so they are ignored (not an error if None).
+        # stopping, so they are ignored.
         self._clf.fit(X, y)
 
     def predict(self, X):

@@ -1,8 +1,5 @@
-"""
-Loads per-flow JSON.gz flow records into
-numpy arrays / pandas DataFrames, with label encoding and a
-confusion-matrix plotting helper.
-"""
+"""Load per-flow JSON.gz records into numpy arrays / pandas DataFrames, with
+label encoding and a confusion-matrix plotting helper."""
 
 import os
 import json
@@ -21,18 +18,17 @@ def encode_label(labels, class_label_pairs=None):
     Args:
         labels (iterable[str]): label strings, one per flow.
         class_label_pairs (dict[str, int] | None): existing class -> index
-            mapping to reuse (val/test sets, so indices stay consistent with
-            training). If None, a new mapping is built from the sorted unique
-            labels seen (training-set use).
+            mapping to reuse (keeps val/test indices consistent with training).
+            If None, a new mapping is built from the sorted unique labels seen.
 
     Returns:
-        tuple[np.ndarray, dict[str, int]]: integer label array (one entry per
-            input label) and the class -> index mapping used.
+        tuple[np.ndarray, dict[str, int]]: integer label array and the
+            class -> index mapping used.
 
     Raises:
         KeyError: a label is missing from ``class_label_pairs`` — a genuinely
-            new/zero-day class must be handled separately, not encoded
-            against the training label set.
+            new/zero-day class must be handled separately, not encoded against
+            the training label set.
     """
     label_list = []
 
@@ -59,8 +55,7 @@ def one_hot(y_, n_classes=None):
 
     Args:
         y_ (np.ndarray): 1-D integer class indices.
-        n_classes (int | None): number of columns; if None, derived as
-            ``max(y_) + 1``.
+        n_classes (int | None): number of columns; if None, derived as ``max(y_) + 1``.
 
     Returns:
         np.ndarray: one-hot matrix of shape ``[len(y_), n_classes]``.
@@ -72,23 +67,15 @@ def one_hot(y_, n_classes=None):
 
 
 def read_json_gz(json_filename, feature_dict, max_rows=None):
-    
-    """
-    Read one .json.gz file of per-flow JSON records and extract the
-    features listed in feature_dict.
+    """Read one .json.gz file of per-flow JSON records, extracting the features
+    listed in ``feature_dict``.
 
-    feature_dict: dict mapping feature_name -> -1 (take all
-        sub-indices) or a list of specific indices to take.
-        Must be provided explicitly — no hidden default file.
+    ``feature_dict`` maps feature name -> -1 (take all sub-indices) or a list of
+    specific indices to take. Must be provided explicitly — no hidden default.
 
-    Memory notes (fix for the previous (n, 2048) float64 preallocation):
-    - Rows are streamed: each parsed JSON dict is processed and released
-      immediately, so all 387k flow dicts are never held at once.
-    - Features are collected into plain Python row lists and converted
-      ONCE at the end into a single float32 array sized to the real
-      maximum feature count (121 for this project), not a 2048-wide
-      float64 buffer (~6.3 GB). float32 is sufficient for flow
-      statistics at this feature scale.
+    Rows are streamed (each parsed dict is released immediately) and collected
+    into a single float32 array sized to the real max feature count, avoiding
+    the previous (n, 2048) float64 preallocation.
 
     Returns:
         dataArray      : np.array [n_samples, n_features_selected] (float32)
@@ -96,9 +83,9 @@ def read_json_gz(json_filename, feature_dict, max_rows=None):
         feature_header : list of feature column names, in order
     """
     feature_header = []
-    blocks = []  # per-row float32 np arrays: ~0.2 GB total at 387k rows,
-    # vs ~2 GB for a list of Python-float lists (boxed floats + list
-    # overhead) — this is the difference between fitting and OOM on 8 GB.
+    # Per-row float32 arrays (~0.2 GB at 387k rows) instead of Python-float
+    # lists (~2 GB) — the difference between fitting and OOM on 8 GB.
+    blocks = []
     ids = []
     skipped_lines = []
 
@@ -161,15 +148,12 @@ def read_json_gz(json_filename, feature_dict, max_rows=None):
 
 
 def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label_pairs=None, max_rows=None):
-    """
-    Walk dataset_folder for .json.gz files, extract features via
-    feature_dict, and optionally attach labels from annotation_file.
+    """Walk ``dataset_folder`` for .json.gz files, extract features via
+    ``feature_dict``, and optionally attach labels from ``annotation_file``.
 
-    Works for any dataset that stores flows in this per-flow JSON.gz
-    format with a matching feature_dict — including CICIDS2017, IF
-    it shares this schema in the source repo. Verify this before
-    relying on it; a mismatched feature_dict will silently produce
-    wrong/empty columns rather than an error.
+    Works for any dataset sharing this per-flow JSON.gz schema with a matching
+    ``feature_dict``. Verify the schema first; a mismatched ``feature_dict``
+    silently produces wrong/empty columns rather than an error.
     """
     labels = []
     data_array = None
@@ -205,14 +189,9 @@ def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label
 def get_training_data(training_folder, annotation_file, feature_dict, max_rows=None):
     """Load training data as (Xtrain, y_train, class_label_pairs, ids).
 
-    max_rows: optional cap on rows read (tracer-bullet runs on the 8 GB
-    dev machine read a small sample; None = full file).
-
-    Returns the raw numpy feature array directly (float32). The previous
-    numpy -> pandas DataFrame -> .values round trip doubled peak memory
-    for nothing: the DataFrame was constructed and immediately converted
-    back, with no named-column access or other pandas-specific use.
-    Callers receive an ndarray either way (df.values was an ndarray).
+    ``max_rows`` caps rows read (tracer-bullet runs; None = full file). Returns
+    the raw float32 numpy array directly — the previous numpy -> pandas ->
+    .values round trip doubled peak memory for no benefit.
     """
     print("\nLoading training set ...")
     feature_names, ids, X, y, clp = read_dataset(
@@ -223,14 +202,9 @@ def get_training_data(training_folder, annotation_file, feature_dict, max_rows=N
 
 
 def get_labeled_eval_data(eval_folder, annotation_file, feature_dict, class_label_pairs):
-    """
-    Load a labeled held-out evaluation set (e.g. NetML's
-    1_test-std_set), reusing the class_label_pairs learned from
-    training so class indices line up.
-
-    Use this instead of the competition's unlabeled submission-set
-    loader — you're evaluating locally, not submitting to a
-    leaderboard.
+    """Load a labeled held-out evaluation set (e.g. NetML's 1_test-std_set),
+    reusing the ``class_label_pairs`` learned from training so class indices
+    line up. Use for local evaluation, not leaderboard submission.
     """
     print("\nLoading evaluation set ...")
     feature_names, ids, X, y, _ = read_dataset(
@@ -245,8 +219,7 @@ def plot_confusion_matrix(directory, y_true, y_pred, classes, normalize=False, t
     F1/mAP (multi-class) in the title.
 
     Args:
-        directory (str): output directory; the figure is written to
-            ``<directory>/CM.png``.
+        directory (str): output directory; the figure is written to ``<directory>/CM.png``.
         y_true (array-like): ground-truth integer labels.
         y_pred (array-like): predicted integer labels.
         classes (list[str]): display names, indexed by class index.

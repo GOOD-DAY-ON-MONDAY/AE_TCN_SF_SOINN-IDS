@@ -1,10 +1,8 @@
 """CLI entrypoint for the model-comparison Runner: ``python -m src.train``.
 
-Subcommands (v1): ``train``, ``show-config``, ``list-models``,
-``list-datasets``.
-Per CONTEXT.md Q7/Q9 the ``train`` subcommand merges three config layers
-(base -> <model_dir>/model.yaml -> ``--config``) in memory; the actual run
-logic is wired up in later tickets and currently prints a stub.
+Subcommands (v1): ``train``, ``show-config``, ``list-models``, ``list-datasets``.
+The ``train`` subcommand merges three config layers (base -> <model_dir>/model.yaml
+-> ``--config``) in memory; base_config.yaml on disk is never modified.
 """
 
 from __future__ import annotations
@@ -20,11 +18,7 @@ from src.utils.config import load_merged_config
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI parser with the ``train``, ``show-config``, ``list-models``
-    and ``list-datasets`` subcommands.
-
-    Returns:
-        argparse.ArgumentParser: configured top-level parser.
-    """
+    and ``list-datasets`` subcommands."""
     parser = argparse.ArgumentParser(
         prog="python -m src.train",
         description="Model-comparison Runner (netml-cl).",
@@ -101,20 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_train(args: argparse.Namespace) -> int:
-    """Execute the ``train`` subcommand: load data, run the model, write reports.
-
-    Args:
-        args (argparse.Namespace): parsed CLI arguments (``model``, ``dataset``,
-            ``config``, ``seeds``/``seed``, ``limit``).
-
-    Returns:
-        int: process exit code (0 on success).
-    """
+    """Execute the ``train`` subcommand: load data, run the model, write reports."""
     model_dir = resolve_model(args.model)
     dataset = resolve_dataset(args.dataset)  # argparse choices already gate this
 
-    # Three-layer config merge (ticket 01); base on disk is never modified.
-    # model.yaml is optional per layer-2 semantics — only pass it if present.
+    # Three-layer config merge; model.yaml is optional (layer 2).
     model_yaml = Path(model_dir) / "model.yaml"
     cfg = load_merged_config(
         model_config_path=model_yaml if model_yaml.is_file() else None,
@@ -143,9 +128,8 @@ def cmd_train(args: argparse.Namespace) -> int:
         ],
     )
 
-    # Real test data is blocked (labels_available: false — ticket 03 /
-    # ready-for-human), so evaluation falls back to the val split held
-    # out of the real training set by the seam.
+    # Test data is blocked (labels_available: false), so evaluation falls back
+    # to the val split held out by the seam.
     import json as _json
 
     from src.data.loader import get_training_data
@@ -155,14 +139,12 @@ def cmd_train(args: argparse.Namespace) -> int:
     ds_cfg = getattr(cfg.data, dataset)
     with open("configs/feature_meta.json") as fh:
         feature_dict = _json.load(fh)
-    # read_dataset() walks a FOLDER of .json.gz files; the config stores the
-    # training file path, so use its parent dir (raw_dir would also sweep
-    # the test-challenge/test-std sets, which must stay out of training).
+    # read_dataset() walks a folder of .json.gz files; the config stores the
+    # training file path, so use its parent dir (raw_dir would also sweep the
+    # test sets, which must stay out of training).
     training_folder = str(Path(ds_cfg.training_set).parent)
-    # Tracer-bullet mode: the raw file is grouped by class, so a head cap
-    # would miss classes; load full (streamed float32, ~0.44 GB peak) and
-    # subsample deterministically per seed for a fast end-to-end run.
-    # Raise/remove _sample_rows for full-scale training.
+    # Tracer-bullet mode: the raw file is class-grouped, so a head cap would
+    # miss classes; load full and subsample deterministically per seed.
     _sample_rows = 50000
     limit = getattr(args, "limit", None)
     if limit is not None:
@@ -172,10 +154,9 @@ def cmd_train(args: argparse.Namespace) -> int:
             feature_dict,
             max_rows=limit,
         )
-        # The raw file is grouped by class, so a plain head cap can yield a
-        # single class (unfittable). Re-read with a growing cap until at
-        # least 2 classes appear, then keep the first `limit` rows PER CLASS
-        # (deterministic, no seed dependence, still a mid-stream early stop).
+        # The raw file is class-grouped, so a plain head cap can yield a single
+        # class (unfittable). Re-read with a growing cap until at least 2 classes
+        # appear, then keep the first `limit` rows per class.
         retries = 0
         while y is not None and len(set(y.tolist())) < 2 and retries < 6:
             retries += 1
@@ -227,15 +208,7 @@ def cmd_train(args: argparse.Namespace) -> int:
 
 
 def cmd_show_config(args: argparse.Namespace) -> int:
-    """Execute the ``show-config`` subcommand: print the merged config.
-
-    Args:
-        args (argparse.Namespace): parsed CLI arguments (``model``, ``dataset``,
-            ``config``).
-
-    Returns:
-        int: process exit code (0 on success).
-    """
+    """Execute the ``show-config`` subcommand: print the merged config."""
     from src.utils.config import (
         DEFAULT_CONFIG_PATH,
         _load_yaml_mapping,
@@ -290,12 +263,7 @@ def _record_base_sources(
 ) -> None:
     """Record the source layer for every leaf key of a merged-config mapping.
 
-    Args:
-        mapping (Mapping): nested config mapping to walk.
-        sources (dict[str, str]): dotted key path -> layer label; entries are
-            only added for paths not already present (later layers win).
-        label (str): label recorded for this layer (e.g. ``"base"``).
-        prefix (str): dotted path prefix used during recursion.
+    Only adds paths not already present, so later layers win.
     """
     for key, value in mapping.items():
         path = f"{prefix}{key}"
@@ -330,11 +298,7 @@ def _yaml_with_sources(merged: dict, sources: dict[str, str]) -> str:
 
 
 def cmd_list_models() -> int:
-    """Print every runnable model directory found under ``models/``.
-
-    Returns:
-        int: process exit code (0 on success).
-    """
+    """Print every runnable model directory found under ``models/``."""
     models = discover_models()
     if not models:
         print("No runnable model directories found under models/ (need main.py).")
@@ -345,11 +309,7 @@ def cmd_list_models() -> int:
 
 
 def cmd_list_datasets() -> int:
-    """Print the valid dataset names, one per line.
-
-    Returns:
-        int: process exit code (0 on success).
-    """
+    """Print the valid dataset names, one per line."""
     for name in VALID_DATASETS:
         print(name)
     return 0
@@ -358,12 +318,7 @@ def cmd_list_datasets() -> int:
 def main(argv: list[str] | None = None) -> int:
     """Parse ``argv``, dispatch the chosen subcommand, and format errors.
 
-    Args:
-        argv (list[str] | None): command-line arguments; ``None`` uses ``sys.argv``.
-
-    Returns:
-        int: process exit code (0 success, 2 on RunnerError, 1 if dispatch
-            falls through).
+    Returns 0 on success, 2 on RunnerError, 1 if dispatch falls through.
     """
     args = build_parser().parse_args(argv)
     try:

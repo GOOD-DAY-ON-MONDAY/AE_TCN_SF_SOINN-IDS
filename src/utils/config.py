@@ -1,10 +1,8 @@
 """Configuration loading and validation for the netml-cl project.
 
-Reads ``configs/base_config.yaml`` into a nested, attribute-accessible
-object and validates that every required key is present before the rest
-of the pipeline uses it. All errors are specific: the raised message
-names the exact missing (or invalid) key, so failures are never silent
-and never generic.
+Reads ``configs/base_config.yaml`` into a nested, attribute-accessible object
+and validates every required key before the pipeline uses it. Errors name the
+exact missing (or invalid) key.
 """
 
 from __future__ import annotations
@@ -134,12 +132,11 @@ def _to_namespace(value: Any) -> Any:
 
 
 def deep_merge(base: dict, override: Mapping[str, Any]) -> dict:
-    """Recursively merge ``override`` into ``base`` and return a NEW dict.
+    """Recursively merge ``override`` into ``base``, returning a new dict.
 
-    Precedence: ``override`` wins on matching keys; keys absent from
-    ``override`` inherit from ``base``. Nested mappings are merged
-    key-by-key; any other value type is replaced wholesale. Neither
-    input dict is mutated.
+    ``override`` wins on matching keys; keys absent from ``override`` inherit
+    from ``base``. Nested mappings merge key-by-key; other value types are
+    replaced wholesale. Neither input is mutated.
     """
     merged: dict = dict(base)
     for key, value in override.items():
@@ -159,11 +156,9 @@ def deep_merge_with_sources(
 ) -> dict[str, str]:
     """Like :func:`deep_merge` but records which layer set each leaf key.
 
-    ``sources`` maps dotted key paths ("training.epochs") to the layer
-    label that last provided the value. Keys present in ``base`` but
-    never overridden keep whatever source label was already recorded
-    (pass the base layer's label when starting the chain).
-    Returns the (mutated) ``sources`` dict for convenience.
+    ``sources`` maps dotted key paths ("training.epochs") to the layer label
+    that last provided the value. Keys never overridden keep their recorded
+    label. Returns the (mutated) ``sources`` dict.
     """
     if sources is None:
         sources = {}
@@ -183,15 +178,14 @@ def load_merged_config(
 ) -> SimpleNamespace:
     """Load the three-layer config merge used by the Runner.
 
-    Layers (later wins on matching keys; unspecified keys inherit from
-    the layer below):
+    Layers (later wins on matching keys; unspecified keys inherit from the
+    layer below):
 
     1. ``configs/base_config.yaml`` (shared defaults) — validated as usual
     2. ``<model_dir>/model.yaml`` (optional, model-specific)
-    3. ad-hoc override file, e.g. via the CLI's ``--config`` (optional)
+    3. ad-hoc override file, e.g. the CLI's ``--config`` (optional)
 
-    The merge happens in memory only for the duration of a run —
-    ``base_config.yaml`` on disk is NEVER modified.
+    The merge is in-memory only; ``base_config.yaml`` on disk is never modified.
     """
     base_file = Path(base_path) if base_path is not None else DEFAULT_CONFIG_PATH
     base = _load_yaml_mapping(base_file)
@@ -225,9 +219,8 @@ def load_config(config_path: str | Path | None = None) -> SimpleNamespace:
     """Load and validate the project YAML config.
 
     Returns a nested namespace, e.g. ``cfg.data.netml2020.feature_dim``.
-    Raises :class:`ConfigError` naming the specific missing key if any
-    required key is absent, or a specific message if a known invariant
-    (feature_dim == 121, class_map size == num_classes, etc.) is violated.
+    Raises :class:`ConfigError` naming the specific missing key or violated
+    invariant (feature_dim == 121, class_map size == num_classes, etc.).
     """
     path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
     if not path.is_file():

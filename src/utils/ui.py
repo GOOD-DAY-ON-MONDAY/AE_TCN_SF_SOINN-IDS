@@ -1,8 +1,7 @@
-"""CLI presentation helpers (ticket 07): color-with-meaning, progress bars,
-plan header, and consistent error styling per CONTEXT.md § CLI Design Language.
+"""CLI presentation helpers: color-with-meaning, progress bars, plan header,
+and consistent error styling.
 
-Stdlib-only, no external dependency. All colors auto-disable when stdout
-is not a TTY or ``NO_COLOR`` is set.
+Stdlib-only. Colors auto-disable when stdout is not a TTY or ``NO_COLOR`` is set.
 """
 
 from __future__ import annotations
@@ -54,7 +53,7 @@ def green(msg: str) -> str:
 
 
 def format_error(msg: str) -> str:
-    """Consistent suggest-the-fix error styling (ticket 02 language)."""
+    """Consistent suggest-the-fix error styling."""
     lines = msg.splitlines()
     return "\n".join([bold("error: ") + lines[0], *lines[1:]])
 
@@ -65,7 +64,7 @@ def print_plan(
     seeds: list[int],
     config_layers: list[tuple[str, str]],
 ) -> None:
-    """Pre-run plan header: what will run, before any compute (abortable)."""
+    """Print the pre-run plan header before any compute (abortable)."""
     print(bold("=== Plan ==="))
     print(f"  model:    {model_dir}")
     print(f"  dataset:  {dataset}")

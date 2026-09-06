@@ -1,20 +1,14 @@
-"""Data-loading seam for the Runner (ticket 03).
+"""Data-loading seam for the Runner.
 
-Hands models plain numpy arrays ``X_train, y_train, X_val, y_val,
-X_test, y_test`` — already label-encoded via ``class_map`` from
-``base_config.yaml``. The Runner imports no deep-learning framework;
-framework conversion stays inside model implementations (CONTEXT.md Q8).
+Hands models plain numpy arrays ``X_train, y_train, X_val, y_val, X_test,
+y_test``, already label-encoded via ``class_map`` from ``base_config.yaml``.
+The Runner imports no deep-learning framework; framework conversion stays
+inside model implementations.
 
-Val/test sourcing status:
-- Val: stratified fraction held out FROM the training set
-  (``splitting.val_split``), governed by ``splitting.random_seed``.
-- Test: **externally blocked.** Both datasets have
-  ``data.<dataset>.labels_available: false`` in base_config.yaml —
-  the 1_test-std / 0_test-challenge annotations are absent (challenge
-  withheld) and re-verification via scripts/validate_data.py has not
-  run. Until that clears, the seam returns ``None`` for the test
-  halves (the ``fit(X, y, X_val=None, y_val=None)`` signature
-  permits it) and evaluation falls back to the val split.
+Val is a stratified fraction held out from the training set
+(``splitting.val_split``, seeded by ``splitting.random_seed``). Test is
+externally blocked: both datasets have ``labels_available: false``, so the
+seam returns ``None`` for the test halves and evaluation falls back to val.
 """
 
 from __future__ import annotations
@@ -39,8 +33,8 @@ def stratified_val_split(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Hold out a stratified ``val_split`` fraction from (X, y).
 
-    Deterministic for a given seed. Preserves the class distribution so
-    every class present in training also appears in val.
+    Deterministic for a given seed; preserves class distribution so every
+    training class also appears in val.
     """
     if not 0.0 < val_split < 1.0:
         raise DataSeamError(
@@ -65,8 +59,8 @@ def encode_with_class_map(
 ) -> np.ndarray:
     """Label-encode string labels using ``class_map`` from base_config.yaml.
 
-    Raises DataSeamError naming the first unknown label (e.g. a genuinely
-    new zero-day class) instead of KeyError from the generic loader.
+    Raises DataSeamError naming the first unknown label (e.g. a genuinely new
+    zero-day class) instead of KeyError from the generic loader.
     """
     try:
         encoded, _ = encode_label(list(labels), dict(class_map))
@@ -89,10 +83,9 @@ def assemble_run_arrays(
 ) -> SimpleNamespace:
     """Build the six-array seam contract for a run.
 
-    Returns a namespace with ``X_train, y_train, X_val, y_val, X_test,
-    y_test``. ``X_test``/``y_test`` are ``None`` while the external
-    labels_available blocker stands; otherwise they are passed through
-    unchanged (test data is never split or shuffled).
+    Returns a namespace with ``X_train, y_train, X_val, y_val, X_test, y_test``.
+    ``X_test``/``y_test`` are ``None`` while the labels_available blocker
+    stands; otherwise they pass through unchanged (never split or shuffled).
     """
     X = np.asarray(X)
     y = np.asarray(y).reshape(-1)

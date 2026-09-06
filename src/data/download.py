@@ -15,8 +15,7 @@ def download_dataset(dataset_name: str, force: bool = False):
     """Sparse-clone the competition repo and copy one dataset into ``data/raw``.
 
     Args:
-        dataset_name (str): key into ``DATASET_PATHS`` (``netml2020`` or
-            ``cicids2017``).
+        dataset_name (str): key into ``DATASET_PATHS`` (``netml2020`` or ``cicids2017``).
         force (bool): re-download even if the target directory already exists.
 
     Raises:
