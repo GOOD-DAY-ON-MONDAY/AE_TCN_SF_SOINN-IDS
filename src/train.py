@@ -1,6 +1,7 @@
 """CLI entrypoint for the model-comparison Runner: ``python -m src.train``.
 
-Subcommands (v1): ``train``, ``show-config``, ``list-models``, ``list-datasets``.
+Subcommands (v1): ``train``, ``show-config``, ``list-models``, ``list-datasets``,
+``builder`` (interactive REPL shell).
 The ``train`` subcommand merges three config layers (base -> <model_dir>/model.yaml
 -> ``--config``) in memory; base_config.yaml on disk is never modified.
 """
@@ -98,6 +99,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list-models", help="List runnable model directories.")
     sub.add_parser("list-datasets", help="List the valid datasets.")
+
+    p_builder = sub.add_parser(
+        "builder",
+        aliases=["interactive"],
+        help="Launch the interactive REPL shell (completion, history, rich UI).",
+    )
+    p_builder.set_defaults(func=None)
     return parser
 
 
@@ -337,6 +345,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_list_models()
         if args.command == "list-datasets":
             return cmd_list_datasets()
+        if args.command in ("builder", "interactive"):
+            from src.utils.shell import run_builder
+
+            return run_builder()
     except RunnerError as exc:
         from src.utils.ui import format_error
 
