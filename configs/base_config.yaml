@@ -84,9 +84,17 @@ splitting:
   #    evaluation.
   val_split: 0.15
   random_seed: 42
+  # Zero-day classes: the 3-5 RAREST non-benign classes per dataset, taken
+  # directly from reports/data/class_counts.csv (produced by
+  # python -m src.data.validator_zeroday). Counts cited:
+  #   netml2020:  Sality=33, Ramnit=400, Cobalt=1379, Downware=3849,
+  #               TrojanDownloader=4020
+  #   cicids2017: webAttack=1617, ssh-patator=1972, ftp-patator=3168
+  #               (only 3 rare non-benign classes exist; DoS=23806 is too
+  #               frequent to withhold, so the list stays at 3)
   zero_day_classes:
-    netml2020: []
-    cicids2017: []
+    netml2020: [Sality, Ramnit, Cobalt, Downware, TrojanDownloader]
+    cicids2017: [webAttack, ssh-patator, ftp-patator]
 
 model:
   # Denoising autoencoder gate: compresses each 121-dim raw flow vector
