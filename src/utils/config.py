@@ -133,6 +133,68 @@ def _to_namespace(value: Any) -> Any:
     return value
 
 
+def deep_merge(base: dict, override: Mapping[str, Any]) -> dict:
+    """Recursively merge ``override`` into ``base`` and return a NEW dict.
+
+    Precedence: ``override`` wins on matching keys; keys absent from
+    ``override`` inherit from ``base``. Nested mappings are merged
+    key-by-key; any other value type is replaced wholesale. Neither
+    input dict is mutated.
+    """
+    merged: dict = dict(base)
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], Mapping) and isinstance(value, Mapping):
+            merged[key] = deep_merge(dict(merged[key]), value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_merged_config(
+    model_config_path: str | Path | None = None,
+    override_path: str | Path | None = None,
+    base_path: str | Path | None = None,
+) -> SimpleNamespace:
+    """Load the three-layer config merge used by the Runner.
+
+    Layers (later wins on matching keys; unspecified keys inherit from
+    the layer below):
+
+    1. ``configs/base_config.yaml`` (shared defaults) — validated as usual
+    2. ``<model_dir>/model.yaml`` (optional, model-specific)
+    3. ad-hoc override file, e.g. via the CLI's ``--config`` (optional)
+
+    The merge happens in memory only for the duration of a run —
+    ``base_config.yaml`` on disk is NEVER modified.
+    """
+    base_file = Path(base_path) if base_path is not None else DEFAULT_CONFIG_PATH
+    base = _load_yaml_mapping(base_file)
+    _validate(base)
+
+    merged = base
+    for optional_path in (model_config_path, override_path):
+        if optional_path is None:
+            continue
+        layer = _load_yaml_mapping(Path(optional_path))
+        merged = deep_merge(merged, layer)
+
+    return _to_namespace(merged)
+
+
+def _load_yaml_mapping(path: str | Path) -> dict:
+    path = Path(path)
+    if not path.is_file():
+        raise ConfigError(f"Config file not found: '{path}'")
+    with open(path, "r", encoding="utf-8") as fh:
+        cfg = yaml.safe_load(fh)
+    if cfg is None:
+        # An empty (or whitespace-only) YAML file contributes no keys.
+        return {}
+    if not isinstance(cfg, dict):
+        raise ConfigError(f"Config file '{path}' does not contain a YAML mapping")
+    return cfg
+
+
 def load_config(config_path: str | Path | None = None) -> SimpleNamespace:
     """Load and validate the project YAML config.
 

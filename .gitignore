@@ -8,3 +8,8 @@ __pycache__/
 prompt.md
 .aider.conf.yml
 .aider.*
+.clinerules
+agents/
+issues/
+.roo/
+.scratch/
