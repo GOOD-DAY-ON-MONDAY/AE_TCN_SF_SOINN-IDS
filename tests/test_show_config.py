@@ -12,9 +12,7 @@ def _make_model_dir(tmp_path, with_model_yaml: bool = True):
     model_dir.mkdir(exist_ok=True)
     (model_dir / "main.py").write_text("def create_model(cfg):\n    return None\n")
     if with_model_yaml:
-        (model_dir / "model.yaml").write_text(
-            "training:\n  epochs: 99\n"
-        )
+        (model_dir / "model.yaml").write_text("training:\n  epochs: 99\n")
     return model_dir
 
 
@@ -83,13 +81,9 @@ def test_show_config_base_only_when_no_optional_layers(
     assert "val_split: 0.15" in out
 
 
-def test_show_config_rejects_bad_model(
-    tmp_path, capsys: pytest.CaptureFixture
-) -> None:
+def test_show_config_rejects_bad_model(tmp_path, capsys: pytest.CaptureFixture) -> None:
     bogus = tmp_path / "bogus"
     bogus.mkdir()
-    rc = train.main(
-        ["show-config", "--model", str(bogus), "--dataset", "netml2020"]
-    )
+    rc = train.main(["show-config", "--model", str(bogus), "--dataset", "netml2020"])
     assert rc == 2
     assert "Unknown model directory" in capsys.readouterr().err

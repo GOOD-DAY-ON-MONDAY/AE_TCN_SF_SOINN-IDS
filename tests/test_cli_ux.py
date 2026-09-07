@@ -18,7 +18,9 @@ from src.utils.ui import (
 from tests.test_model_contract import REQUIRED, _Cfg, _main_py, _write_model
 
 
-def test_plan_header_lists_model_dataset_seeds_and_layers(capsys: pytest.CaptureFixture) -> None:
+def test_plan_header_lists_model_dataset_seeds_and_layers(
+    capsys: pytest.CaptureFixture,
+) -> None:
     print_plan(
         model_dir="models/baseline/rf",
         dataset="netml2020",

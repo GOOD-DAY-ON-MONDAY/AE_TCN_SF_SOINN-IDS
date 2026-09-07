@@ -91,9 +91,7 @@ def test_override_layer_wins_over_model_layer(tmp_path: Path) -> None:
         tmp_path / "override.yaml",
         "training:\n  learning_rate: 9.9\n  batch_size: 7\n",
     )
-    cfg = load_merged_config(
-        model_config_path=model_yaml, override_path=override_yaml
-    )
+    cfg = load_merged_config(model_config_path=model_yaml, override_path=override_yaml)
     # All three layers defined learning_rate: the later (--config) wins.
     assert cfg.training.learning_rate == 9.9
     # Override wins over base for batch_size; model layer didn't define it.
@@ -115,9 +113,7 @@ def test_base_file_on_disk_is_never_modified(tmp_path: Path) -> None:
         tmp_path / "override.yaml",
         "training:\n  learning_rate: 9.9\n",
     )
-    load_merged_config(
-        model_config_path=model_yaml, override_path=override_yaml
-    )
+    load_merged_config(model_config_path=model_yaml, override_path=override_yaml)
     assert _digest(DEFAULT_CONFIG_PATH) == before, (
         "base_config.yaml must never be modified by the merge"
     )

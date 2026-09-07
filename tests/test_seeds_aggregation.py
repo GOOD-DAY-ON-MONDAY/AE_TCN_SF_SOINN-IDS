@@ -88,18 +88,20 @@ def test_aggregation_math_on_fixed_stub_across_two_seeds(
 
 
 def test_aggregate_rows_single_row_has_zero_std() -> None:
-    rows = [{
-        "accuracy": 0.5,
-        "precision": 0.5,
-        "recall": 0.5,
-        "f1": 0.5,
-        "macro_precision": 0.5,
-        "macro_recall": 0.5,
-        "macro_f1": 0.5,
-        "latency_ms": 2.0,
-        "peak_mem_gb": 1.0,
-        "train_time_s": 0.1,
-    }]
+    rows = [
+        {
+            "accuracy": 0.5,
+            "precision": 0.5,
+            "recall": 0.5,
+            "f1": 0.5,
+            "macro_precision": 0.5,
+            "macro_recall": 0.5,
+            "macro_f1": 0.5,
+            "latency_ms": 2.0,
+            "peak_mem_gb": 1.0,
+            "train_time_s": 0.1,
+        }
+    ]
     agg = aggregate_rows(rows)  # type: ignore[arg-type]
     for key in ("accuracy", "latency_ms", "train_time_s"):
         mean, std = agg[key]

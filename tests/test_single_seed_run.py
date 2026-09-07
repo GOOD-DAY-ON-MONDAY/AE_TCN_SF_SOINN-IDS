@@ -62,8 +62,8 @@ def test_full_run_produces_artifacts_and_csv_row(
     assert "confusion_matrix" in metrics
     assert sum(sum(r) for r in metrics["confusion_matrix"]) == len(X_val)
     assert 0.0 <= metrics["accuracy"] <= 1.0
-    assert metrics["latency_ms"] >= 0.0      # ms/flow
-    assert metrics["peak_mem_gb"] > 0.0      # process RSS, GB
+    assert metrics["latency_ms"] >= 0.0  # ms/flow
+    assert metrics["peak_mem_gb"] > 0.0  # process RSS, GB
     assert metrics["train_time_s"] >= 0.0
 
     # --- exactly one CSV row with the exact 15 columns --------------------

@@ -26,20 +26,18 @@ def _cfg(zero_day: list[str]) -> SimpleNamespace:
         splitting=SimpleNamespace(
             val_split=0.15,
             random_seed=42,
-            zero_day_classes=SimpleNamespace(
-                netml2020=zero_day, cicids2017=[]
-            ),
+            zero_day_classes=SimpleNamespace(netml2020=zero_day, cicids2017=[]),
         ),
     )
 
 
 def _incremental_model(tmp_path: Path) -> Path:
-    src = _main_py(("fit", "predict", "save", "partial_fit", "predict_and_adapt"),
-                   incremental=True)
+    src = _main_py(
+        ("fit", "predict", "save", "partial_fit", "predict_and_adapt"), incremental=True
+    )
     src = src.replace(
         "def partial_fit(self, X, y):\n        pass\n",
-        "def partial_fit(self, X, y):\n"
-        "        self.taught_ = list(y)\n",
+        "def partial_fit(self, X, y):\n        self.taught_ = list(y)\n",
     ).replace(
         "def predict(self, X):\n",
         "def predict(self, X):\n",
@@ -48,8 +46,9 @@ def _incremental_model(tmp_path: Path) -> Path:
 
 
 def _plain_model(tmp_path: Path) -> Path:
-    return _write_model(tmp_path, _main_py(("fit", "predict", "save")),
-                        name="plain_model")
+    return _write_model(
+        tmp_path, _main_py(("fit", "predict", "save")), name="plain_model"
+    )
 
 
 def _data():
@@ -137,8 +136,11 @@ def test_predict_and_adapt_never_invoked_by_loop(
     X_train, y_train, X_val, y_val = _data()
     model.fit(X_val[y_val != 2], y_val[y_val != 2])
     monkeypatch.setattr(
-        type(model), "predict_and_adapt",
-        lambda self, X: (_ for _ in ()).throw(AssertionError("predict_and_adapt called")),
+        type(model),
+        "predict_and_adapt",
+        lambda self, X: (_ for _ in ()).throw(
+            AssertionError("predict_and_adapt called")
+        ),
         raising=False,
     )
     X_train, y_train, X_val, y_val = _data()

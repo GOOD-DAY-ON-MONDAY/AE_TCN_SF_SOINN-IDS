@@ -40,7 +40,9 @@ def discover_models(root: Path = _MODELS_ROOT) -> list[Path]:
     for main_py in sorted(root.glob("*/**/main.py")):
         model_dir = main_py.parent
         parts = {p.name for p in model_dir.parents} | {model_dir.name}
-        if "__pycache__" in parts or any(p.name.startswith(".") for p in model_dir.parents):
+        if "__pycache__" in parts or any(
+            p.name.startswith(".") for p in model_dir.parents
+        ):
             continue
         try:
             found.append(model_dir.relative_to(repo_root))
@@ -110,9 +112,7 @@ def run_interactive_train(console: Console) -> list[str] | None:
     try:
         model = inquirer.select(
             message="Model:",
-            choices=[
-                Choice(value=str(m), name=str(m)) for m in models
-            ],
+            choices=[Choice(value=str(m), name=str(m)) for m in models],
             qmark="",
             amark="",
             pointer="›",  # noqa: RUF001
@@ -134,8 +134,10 @@ def run_interactive_train(console: Console) -> list[str] | None:
             default="42",
             qmark="",
             amark="",
-            validate=lambda text: bool(_parse_seeds(text))
-            or "Enter one or more integers (e.g. 42 or 1, 2, 3).",
+            validate=lambda text: (
+                bool(_parse_seeds(text))
+                or "Enter one or more integers (e.g. 42 or 1, 2, 3)."
+            ),
         ).execute()
 
         limit_raw: str = inquirer.text(
@@ -143,9 +145,11 @@ def run_interactive_train(console: Console) -> list[str] | None:
             default="",
             qmark="",
             amark="",
-            validate=lambda text: text.strip() == ""
-            or _parse_limit(text) is not None
-            or "Enter a positive integer, or leave blank for full data.",
+            validate=lambda text: (
+                text.strip() == ""
+                or _parse_limit(text) is not None
+                or "Enter a positive integer, or leave blank for full data."
+            ),
         ).execute()
     except KeyboardInterrupt:
         console.print("[dim](form cancelled — command not run)[/dim]")

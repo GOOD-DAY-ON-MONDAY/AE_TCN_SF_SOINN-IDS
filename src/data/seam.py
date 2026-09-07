@@ -37,9 +37,7 @@ def stratified_val_split(
     training class also appears in val.
     """
     if not 0.0 < val_split < 1.0:
-        raise DataSeamError(
-            f"val_split must be in (0, 1), got {val_split!r}"
-        )
+        raise DataSeamError(f"val_split must be in (0, 1), got {val_split!r}")
     rng = np.random.default_rng(seed)
     train_idx: list[int] = []
     val_idx: list[int] = []
@@ -96,9 +94,7 @@ def assemble_run_arrays(
     X_train, y_train, X_val, y_val = stratified_val_split(X, y, val_split, seed)
 
     if (X_test is None) != (y_test is None):
-        raise DataSeamError(
-            "X_test and y_test must be provided together or both None"
-        )
+        raise DataSeamError("X_test and y_test must be provided together or both None")
     if X_test is not None and len(np.asarray(X_test)) != len(np.asarray(y_test)):
         raise DataSeamError(
             f"X_test/y_test length mismatch: {len(X_test)} vs {len(y_test)}"

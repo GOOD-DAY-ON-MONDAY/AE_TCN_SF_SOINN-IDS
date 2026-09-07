@@ -181,7 +181,9 @@ def cmd_train(args: argparse.Namespace) -> int:
                 f"(file is class-grouped); re-reading with cap {_cap} ..."
             )
             X, y, _, _ = get_training_data(
-                training_folder, ds_cfg.training_annotations, feature_dict,
+                training_folder,
+                ds_cfg.training_annotations,
+                feature_dict,
                 max_rows=_cap,
             )
         if y is not None and len(set(y.tolist())) >= 2:
@@ -192,7 +194,9 @@ def cmd_train(args: argparse.Namespace) -> int:
                 _idx = _np.flatnonzero(y == _cls)[:limit]
                 _keep[_idx] = True
             X, y = X[_keep], y[_keep]
-        print(f"--limit: using {len(X)} row(s) of training data (debug run, first {limit}/class)")
+        print(
+            f"--limit: using {len(X)} row(s) of training data (debug run, first {limit}/class)"
+        )
     else:
         X, y, _, _ = get_training_data(
             training_folder,
@@ -205,7 +209,9 @@ def cmd_train(args: argparse.Namespace) -> int:
             _rng = _np.random.default_rng(seed)
             _idx = _np.sort(_rng.choice(len(X), size=_sample_rows, replace=False))
             X, y = X[_idx], y[_idx]
-            print(f"tracer run: sampled {_sample_rows} of 387268 loaded rows (seed {seed})")
+            print(
+                f"tracer run: sampled {_sample_rows} of 387268 loaded rows (seed {seed})"
+            )
 
     arrays = assemble_run_arrays(X, y, cfg.splitting.val_split, seed)
 
@@ -288,8 +294,6 @@ def _record_base_sources(
             sources[path] = label
 
 
-
-
 def _yaml_with_sources(merged: dict, sources: dict[str, str]) -> str:
     """Dump merged config as YAML, annotating leaf keys with their source."""
     import yaml as _yaml
@@ -306,7 +310,9 @@ def _yaml_with_sources(merged: dict, sources: dict[str, str]) -> str:
             else:
                 src = sources.get(path, "base")
                 marker = "" if src == "base" else f"   # <- {src}"
-                lines.append(f"{pad}{key}: {_yaml.safe_dump(value, default_flow_style=True).strip()}{marker}")
+                lines.append(
+                    f"{pad}{key}: {_yaml.safe_dump(value, default_flow_style=True).strip()}{marker}"
+                )
 
     walk(merged, "", 0)
     return "\n".join(lines)

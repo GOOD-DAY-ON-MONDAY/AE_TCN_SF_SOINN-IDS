@@ -299,8 +299,11 @@ def run_zero_day_loop(
     zero_day_classes = list(_cfg_get(zd_cfg, dataset, []) or [])
 
     if not zero_day_classes:
-        print(_yellow("zero-day loop skipped (no zero-day classes configured "
-                      f"for {dataset})"))
+        print(
+            _yellow(
+                f"zero-day loop skipped (no zero-day classes configured for {dataset})"
+            )
+        )
         return None
     if not getattr(model, "supports_incremental", False):
         print(_yellow("zero-day loop skipped (not an incremental model)"))
@@ -313,15 +316,20 @@ def run_zero_day_loop(
     known_labels = sorted(set(np.asarray(y_known).tolist()) - zd_indices)
 
     if len(X_withheld) == 0 or len(X_known) == 0:
-        print(_yellow("zero-day loop skipped (no withheld/known samples in "
-                      "the evaluation split)"))
+        print(
+            _yellow(
+                "zero-day loop skipped (no withheld/known samples in "
+                "the evaluation split)"
+            )
+        )
         return None
 
     # Step 1: predict on the withheld class — is it flagged unknown?
     pre_withheld_pred = np.asarray(model.predict(X_withheld))
     known_label_set = set(known_labels)
-    flagged_unknown = int(np.mean([int(p) not in known_label_set
-                                   for p in pre_withheld_pred]))
+    flagged_unknown = int(
+        np.mean([int(p) not in known_label_set for p in pre_withheld_pred])
+    )
 
     # Retention snapshot on known classes BEFORE teaching.
     pre_known_pred = np.asarray(model.predict(X_known))
@@ -345,9 +353,11 @@ def run_zero_day_loop(
         "post_teach_known_accuracy": post_accuracy,
         "used_predict_and_adapt": False,
     }
-    print(f"zero-day loop: flagged_unknown={flagged_unknown:.2f} "
-          f"retention_stability={retention:.4f} "
-          f"post_teach_accuracy={post_accuracy:.4f}")
+    print(
+        f"zero-day loop: flagged_unknown={flagged_unknown:.2f} "
+        f"retention_stability={retention:.4f} "
+        f"post_teach_accuracy={post_accuracy:.4f}"
+    )
     if run_dir is not None:
         Path(run_dir).mkdir(parents=True, exist_ok=True)
         (Path(run_dir) / "zero_day.json").write_text(
@@ -398,8 +408,12 @@ def run_single_seed(
         X_eval, y_eval = X_test, y_test
     else:
         X_eval, y_eval = X_val, y_val
-        print(_yellow("note: test data unavailable (labels_available: false); "
-                      "evaluating on the validation split"))
+        print(
+            _yellow(
+                "note: test data unavailable (labels_available: false); "
+                "evaluating on the validation split"
+            )
+        )
 
     # ---- testing phase: chunked predict with a determinate bar ----------
     y_pred = chunked_predict_with_progress(model, X_eval, label="evaluating")
@@ -532,8 +546,15 @@ def _print_summary(row: dict[str, Any], n_eval: int) -> None:
     print(f"  model:       {row['model']}")
     print(f"  dataset:     {row['dataset']}   seed: {row['seed']}")
     print(f"  eval flows:  {n_eval}")
-    for key in ("accuracy", "precision", "recall", "f1",
-                "macro_precision", "macro_recall", "macro_f1"):
+    for key in (
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "macro_precision",
+        "macro_recall",
+        "macro_f1",
+    ):
         print(f"  {key:16s} {row[key]:.4f}")
     print(f"  {'latency_ms':16s} {row['latency_ms']:.4f}")
     print(f"  {'peak_mem_gb':16s} {row['peak_mem_gb']:.4f}")

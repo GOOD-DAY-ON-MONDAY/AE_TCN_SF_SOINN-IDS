@@ -78,12 +78,8 @@ def _make_cfg() -> object:
     return SimpleNamespace(
         training=SimpleNamespace(random_seed=42),
         data=SimpleNamespace(
-            netml2020=SimpleNamespace(
-                class_map=cm21, num_classes=21, feature_dim=121
-            ),
-            cicids2017=SimpleNamespace(
-                class_map=cm8, num_classes=8, feature_dim=121
-            ),
+            netml2020=SimpleNamespace(class_map=cm21, num_classes=21, feature_dim=121),
+            cicids2017=SimpleNamespace(class_map=cm8, num_classes=8, feature_dim=121),
         ),
         splitting=SimpleNamespace(val_split=0.15, random_seed=42),
     )
@@ -153,7 +149,9 @@ def test_incremental_with_both_extra_methods_passes(tmp_path: Path) -> None:
 
 
 def test_non_incremental_model_without_extra_methods_passes(tmp_path: Path) -> None:
-    model = validate_model(load_model(_write_model(tmp_path, _main_py(REQUIRED)), _Cfg()))
+    model = validate_model(
+        load_model(_write_model(tmp_path, _main_py(REQUIRED)), _Cfg())
+    )
     assert not getattr(model, "supports_incremental", False)
 
 

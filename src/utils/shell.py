@@ -44,14 +44,26 @@ _BANNER = (
     "or [bold]exit[/bold] (Ctrl+D) to quit."
 )
 
-_SHELL_COMMANDS = ("train", "list-models", "list-datasets", "show-config", "help", "clear", "exit")
+_SHELL_COMMANDS = (
+    "train",
+    "list-models",
+    "list-datasets",
+    "show-config",
+    "help",
+    "clear",
+    "exit",
+)
 
 _HELP_ROWS = [
     ("train", "Open the interactive training form (model / dataset / seeds / limit)."),
-    ("train --model DIR --dataset DS [--config F] [--seeds N ...] [--limit N]",
-     "Train and evaluate a model (same flags as the CLI)."),
-    ("show-config --model DIR --dataset DS [--config F]",
-     "Print the fully merged config without running anything."),
+    (
+        "train --model DIR --dataset DS [--config F] [--seeds N ...] [--limit N]",
+        "Train and evaluate a model (same flags as the CLI).",
+    ),
+    (
+        "show-config --model DIR --dataset DS [--config F]",
+        "Print the fully merged config without running anything.",
+    ),
     ("list-models", "List runnable model directories."),
     ("list-datasets", "List the valid datasets."),
     ("help", "Show this command table."),

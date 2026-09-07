@@ -9,7 +9,7 @@ from __future__ import annotations
 import itertools
 import math
 import os
-import shutil
+
 import sys
 import threading
 from collections.abc import Callable
@@ -166,7 +166,3 @@ def phase(label: str, fn: Callable[[], Any]) -> Any:
     with Spinner(label):
         return fn()
 
-
-def terminal_width() -> int:
-    """Return the terminal width in columns (falls back to 80)."""
-    return shutil.get_terminal_size((80, 24)).columns

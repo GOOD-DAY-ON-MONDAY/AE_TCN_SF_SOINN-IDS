@@ -6,7 +6,7 @@ The config is loaded by `src/utils/config.py`:
 from src.utils.config import load_config
 
 cfg = load_config()
-cfg.data.netml2020.feature_dim   # 121
+cfg.data.netml2020.feature_dim  # 121
 cfg.model.temporal_engine.channels  # [64, 64, 32]
 ```
 

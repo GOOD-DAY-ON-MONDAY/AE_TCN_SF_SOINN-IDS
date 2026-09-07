@@ -122,9 +122,12 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 
+
 class SVMModel:
     def __init__(self, C: float = 1.0):
-        self._clf = make_pipeline(StandardScaler(), LinearSVC(C=C, dual="auto", max_iter=10000))
+        self._clf = make_pipeline(
+            StandardScaler(), LinearSVC(C=C, dual="auto", max_iter=10000)
+        )
 
     def fit(self, X, y, X_val=None, y_val=None):
         self._clf.fit(X, y)
@@ -135,6 +138,7 @@ class SVMModel:
     def save(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self._clf, path)
+
 
 def create_model(cfg):
     return SVMModel(C=float(getattr(cfg.model, "C", 1.0)))

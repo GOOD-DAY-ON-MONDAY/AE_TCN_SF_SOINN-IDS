@@ -140,7 +140,11 @@ def deep_merge(base: dict, override: Mapping[str, Any]) -> dict:
     """
     merged: dict = dict(base)
     for key, value in override.items():
-        if key in merged and isinstance(merged[key], Mapping) and isinstance(value, Mapping):
+        if (
+            key in merged
+            and isinstance(merged[key], Mapping)
+            and isinstance(value, Mapping)
+        ):
             merged[key] = deep_merge(dict(merged[key]), value)
         else:
             merged[key] = value
@@ -164,8 +168,14 @@ def deep_merge_with_sources(
         sources = {}
     for key, value in override.items():
         path = f"{prefix}{key}"
-        if key in base and isinstance(base[key], Mapping) and isinstance(value, Mapping):
-            deep_merge_with_sources(dict(base[key]), value, source, sources, prefix=f"{path}.")
+        if (
+            key in base
+            and isinstance(base[key], Mapping)
+            and isinstance(value, Mapping)
+        ):
+            deep_merge_with_sources(
+                dict(base[key]), value, source, sources, prefix=f"{path}."
+            )
         else:
             sources[path] = source
     return sources

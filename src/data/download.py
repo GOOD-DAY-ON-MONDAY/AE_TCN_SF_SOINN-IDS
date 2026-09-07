@@ -6,10 +6,8 @@ from pathlib import Path
 REPO_URL = "https://github.com/ACANETS/NetML-Competition2020.git"
 BASE_DIR = Path("data/raw")
 
-DATASET_PATHS = {
-    "netml2020": "data/NetML",
-    "cicids2017": "data/CICIDS2017"
-}
+DATASET_PATHS = {"netml2020": "data/NetML", "cicids2017": "data/CICIDS2017"}
+
 
 def download_dataset(dataset_name: str, force: bool = False):
     """Sparse-clone the competition repo and copy one dataset into ``data/raw``.
@@ -22,7 +20,9 @@ def download_dataset(dataset_name: str, force: bool = False):
         ValueError: ``dataset_name`` is not a known dataset.
     """
     if dataset_name not in DATASET_PATHS:
-        raise ValueError(f"Unknown dataset: {dataset_name}. Choose from {list(DATASET_PATHS.keys())}")
+        raise ValueError(
+            f"Unknown dataset: {dataset_name}. Choose from {list(DATASET_PATHS.keys())}"
+        )
 
     target_dir = (BASE_DIR / dataset_name).resolve()
 
@@ -31,21 +31,39 @@ def download_dataset(dataset_name: str, force: bool = False):
     if (
         target_dir.exists()
         and not force
-        and ((target_dir.is_dir() and any(target_dir.iterdir())) or target_dir.is_file())
+        and (
+            (target_dir.is_dir() and any(target_dir.iterdir())) or target_dir.is_file()
+        )
     ):
-        print(f"[SKIP] '{dataset_name}' already exists at {target_dir} — skipping download.")
+        print(
+            f"[SKIP] '{dataset_name}' already exists at {target_dir} — skipping download."
+        )
         return
     target_dir.mkdir(parents=True, exist_ok=True)
 
     tmp_dir = (BASE_DIR / f"_tmp_{dataset_name}").resolve()
-    
+
     try:
-        subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse", REPO_URL, str(tmp_dir)], check=True)
+        subprocess.run(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                "--filter=blob:none",
+                "--sparse",
+                REPO_URL,
+                str(tmp_dir),
+            ],
+            check=True,
+        )
         git_target = DATASET_PATHS[dataset_name]
-        subprocess.run(["git", "sparse-checkout", "set", git_target], cwd=str(tmp_dir), check=True)
-        
+        subprocess.run(
+            ["git", "sparse-checkout", "set", git_target], cwd=str(tmp_dir), check=True
+        )
+
         src_path = tmp_dir / git_target
-        
+
         for item in src_path.iterdir():
             d = target_dir / item.name
             if item.is_dir():
@@ -63,10 +81,15 @@ def download_dataset(dataset_name: str, force: bool = False):
         if tmp_dir.exists():
             shutil.rmtree(tmp_dir)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download datasets for NetML project.")
-    parser.add_argument("--dataset", type=str, required=True, choices=["netml2020", "cicids2017", "all"])
-    parser.add_argument("--force", action="store_true", help="Re-download even if data already exists.")
+    parser.add_argument(
+        "--dataset", type=str, required=True, choices=["netml2020", "cicids2017", "all"]
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Re-download even if data already exists."
+    )
     args = parser.parse_args()
 
     if args.dataset == "all":

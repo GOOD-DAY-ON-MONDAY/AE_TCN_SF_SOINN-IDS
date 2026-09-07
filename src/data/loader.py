@@ -1,14 +1,10 @@
-"""Load per-flow JSON.gz records into numpy arrays / pandas DataFrames, with
-label encoding and a confusion-matrix plotting helper."""
+"""Load per-flow JSON.gz records into numpy arrays, with label encoding."""
 
 import gzip
 import json
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from sklearn import metrics
 
 
 def encode_label(labels, class_label_pairs=None):
@@ -47,22 +43,6 @@ def encode_label(labels, class_label_pairs=None):
 
     label_array = np.asarray(label_list).reshape((-1,))
     return label_array, class_label_pairs
-
-
-def one_hot(y_, n_classes=None):
-    """One-hot encode integer label indices.
-
-    Args:
-        y_ (np.ndarray): 1-D integer class indices.
-        n_classes (int | None): number of columns; if None, derived as ``max(y_) + 1``.
-
-    Returns:
-        np.ndarray: one-hot matrix of shape ``[len(y_), n_classes]``.
-    """
-    if n_classes is None:
-        n_classes = int(max(y_)) + 1
-    y_ = y_.reshape(len(y_))
-    return np.eye(n_classes)[np.array(y_, dtype=np.int32)]
 
 
 def read_json_gz(json_filename, feature_dict, max_rows=None):
@@ -115,7 +95,11 @@ def read_json_gz(json_filename, feature_dict, max_rows=None):
                     if isinstance(extracted[0], dict):
                         # e.g. SPLT / byte_dist stored as dict — not handled here
                         continue
-                    indices = range(len(extracted)) if feature_dict[feature] == -1 else feature_dict[feature]
+                    indices = (
+                        range(len(extracted))
+                        if feature_dict[feature] == -1
+                        else feature_dict[feature]
+                    )
                     for j in indices:
                         row.append(extracted[j])
                         col_name = f"{feature}_{j}"
@@ -146,7 +130,13 @@ def read_json_gz(json_filename, feature_dict, max_rows=None):
     return data_array, ids, feature_header
 
 
-def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label_pairs=None, max_rows=None):
+def read_dataset(
+    dataset_folder,
+    feature_dict,
+    annotation_file=None,
+    class_label_pairs=None,
+    max_rows=None,
+):
     """Walk ``dataset_folder`` for .json.gz files, extract features via
     ``feature_dict``, and optionally attach labels from ``annotation_file``.
 
@@ -164,12 +154,16 @@ def read_dataset(dataset_folder, feature_dict, annotation_file=None, class_label
             if not f.endswith(".json.gz"):
                 continue
             print(f"Reading {f}")
-            d, ids, f_names = read_json_gz(os.path.join(root, f), feature_dict, max_rows=max_rows)
+            d, ids, f_names = read_json_gz(
+                os.path.join(root, f), feature_dict, max_rows=max_rows
+            )
 
             if len(f_names) > len(feature_names):
                 feature_names = f_names
 
-            data_array = d if data_array is None else np.concatenate((data_array, d), axis=0)
+            data_array = (
+                d if data_array is None else np.concatenate((data_array, d), axis=0)
+            )
             all_ids.extend(ids)
 
             if annotation_file is not None:
@@ -194,100 +188,13 @@ def get_training_data(training_folder, annotation_file, feature_dict, max_rows=N
     """
     print("\nLoading training set ...")
     _, ids, X, y, clp = read_dataset(
-        training_folder, feature_dict, annotation_file, class_label_pairs=None,
+        training_folder,
+        feature_dict,
+        annotation_file,
+        class_label_pairs=None,
         max_rows=max_rows,
     )
     return X, y, clp, ids
 
 
-def get_labeled_eval_data(eval_folder, annotation_file, feature_dict, class_label_pairs):
-    """Load a labeled held-out evaluation set (e.g. NetML's 1_test-std_set),
-    reusing the ``class_label_pairs`` learned from training so class indices
-    line up. Use for local evaluation, not leaderboard submission.
-    """
-    print("\nLoading evaluation set ...")
-    feature_names, ids, X, y, _ = read_dataset(
-        eval_folder, feature_dict, annotation_file, class_label_pairs=class_label_pairs
-    )
-    df = pd.DataFrame(X, columns=feature_names)
-    return df.values, y, ids
 
-
-def plot_confusion_matrix(directory, y_true, y_pred, classes, normalize=False, title=None, cmap=plt.cm.Blues):
-    """Compute and save a confusion-matrix plot with TPR/FAR (binary) or
-    F1/mAP (multi-class) in the title.
-
-    Args:
-        directory (str): output directory; the figure is written to ``<directory>/CM.png``.
-        y_true (array-like): ground-truth integer labels.
-        y_pred (array-like): predicted integer labels.
-        classes (list[str]): display names, indexed by class index.
-        normalize (bool): if True, plot row-normalized counts instead of raw.
-        title (str | None): figure title; auto-generated when None.
-        cmap (matplotlib colormap): cell coloring (default ``plt.cm.Blues``).
-
-    Returns:
-        tuple[matplotlib.axes.Axes, np.ndarray]: the plot axes and the
-            (possibly normalized) confusion matrix.
-    """
-    cm = metrics.confusion_matrix(y_true, y_pred)
-    n_classes = cm.shape[0]
-
-    if n_classes == 2:
-        detection_rate = cm[1, 1] / (cm[1, 0] + cm[1, 1])
-        false_alarm_rate = cm[0, 1] / (cm[0, 0] + cm[0, 1])
-        print(f"TPR: \t\t\t{detection_rate:.5f}")
-        print(f"FAR: \t\t\t{false_alarm_rate:.5f}")
-        if not title:
-            label = "Normalized confusion matrix" if normalize else "Confusion matrix, without normalization"
-            title = f"{label}\nTPR:{detection_rate:.5f} - FAR:{false_alarm_rate:.5f}"
-    else:
-        f1 = metrics.f1_score(y_true, y_pred, average="weighted")
-        y_true_oh = one_hot(y_true, n_classes)
-        y_pred_oh = one_hot(y_pred, n_classes)
-        mAP = np.mean([
-            metrics.average_precision_score(y_true_oh[:, c], y_pred_oh[:, c], average="weighted")
-            for c in range(n_classes)
-        ])
-        print(f"F1: \t\t\t{f1:.5f}")
-        print(f"mAP: \t\t\t{mAP:.5f}")
-        if not title:
-            label = "Normalized confusion matrix" if normalize else "Confusion matrix, without normalization"
-            title = f"{label}\nF1:{f1:.5f} - mAP:{mAP:.5f}"
-
-    cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
-    if normalize:
-        cm = cm_norm
-
-    fig, ax = plt.subplots()
-    ax.imshow(cm_norm, interpolation="nearest", cmap=cmap)
-    ax.set(
-        xticks=np.arange(cm.shape[1]),
-        yticks=np.arange(cm.shape[0]),
-        xticklabels=classes,
-        yticklabels=classes,
-        title=title,
-        ylabel="True label",
-        xlabel="Predicted label",
-    )
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-
-    fnt = 16 if n_classes < 4 else (10 if n_classes < 8 else max(4, 16 - n_classes))
-    fmt = ".2f" if normalize else "d"
-    thresh = np.sum(cm, axis=1) * 0.66
-
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            if cm[i, j] != 0:
-                ax.text(
-                    j, i, format(cm[i, j], fmt),
-                    ha="center", va="center", fontsize=fnt,
-                    color="white" if cm[i, j] > thresh[i] else "black",
-                )
-
-    fig.tight_layout()
-    out_path = os.path.join(directory, "CM.png")
-    fig.savefig(out_path, bbox_inches="tight")
-    print(f"Confusion matrix saved to {out_path}")
-
-    return ax, cm
