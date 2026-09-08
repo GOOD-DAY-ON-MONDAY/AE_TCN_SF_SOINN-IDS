@@ -401,7 +401,14 @@ def run_single_seed(
     fit_kwargs = {"X_val": X_val, "y_val": y_val}
     sig = inspect.signature(model.fit)
     if progress is not None and ("progress_callback" in sig.parameters or "callback" in sig.parameters):
-        train_task = progress.add_task(f"[bold]training[/bold] [dim]({model_dir.name})[/dim]", total=None)
+        # Epoch/iteration-based model: fit() reports real steps through the
+        # callback (advance=1 per epoch/batch, total=epochs). The bar moves
+        # only when the model actually reports a step — never synthetically.
+        # NOTE: implemented but unverified — no epoch-based model exists yet.
+        train_task = progress.add_task(
+            f"[bold]training[/bold] [dim]({model_dir.name}: epoch-based)[/dim]",
+            total=None,
+        )
 
         def _cb(advance: int = 1, total: int | None = None, description: str | None = None) -> None:
             kw: dict[str, Any] = {"advance": advance}
@@ -424,8 +431,13 @@ def run_single_seed(
                 description=f"[green]training completed[/green] [dim]({train_time_s:.2f}s)[/dim]",
             )
     else:
+        # One-shot fit-call model (e.g. sklearn SVM/RF): .fit() is a single
+        # blocking call with no intermediate progress hooks. Per the CLI
+        # design rules, show an indeterminate spinner labeled with what is
+        # running — never a fabricated percentage.
         phase(
-            f"training [dim]({model_dir.name})[/dim]",
+            f"training [dim]({model_dir.name}: one-shot fit, "
+            f"no intermediate progress)[/dim]",
             lambda: model.fit(X_train, y_train, **fit_kwargs),
             progress=progress,
         )

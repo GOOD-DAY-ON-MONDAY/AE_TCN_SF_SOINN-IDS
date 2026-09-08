@@ -45,7 +45,7 @@ def encode_label(labels, class_label_pairs=None):
     return label_array, class_label_pairs
 
 
-def read_json_gz(json_filename, feature_dict, max_rows=None, quiet=False):
+def read_json_gz(json_filename, feature_dict, max_rows=None, quiet=False, progress=None):
     """Read one .json.gz file of per-flow JSON records, extracting the features
     listed in ``feature_dict``.
 
@@ -55,6 +55,14 @@ def read_json_gz(json_filename, feature_dict, max_rows=None, quiet=False):
     Rows are streamed (each parsed dict is released immediately) and collected
     into a single float32 array sized to the real max feature count, avoiding
     the previous (n, 2048) float64 preallocation.
+
+    ``progress`` is an optional callable ``(bytes_read, total_bytes,
+    rows_parsed)`` invoked periodically as the file is actually streamed. The
+    bar's total is the compressed file size (os.stat) — a real, knowable
+    quantity — and the current position is the gzip stream's consumed offset.
+    This JSONL.gz format has no row-count header, so a row-based total would
+    require a full decompression pre-pass (nearly as expensive as the read
+    itself); bytes-read is the honest signal instead.
 
     Returns:
         dataArray      : np.array [n_samples, n_features_selected] (float32)
@@ -68,18 +76,36 @@ def read_json_gz(json_filename, feature_dict, max_rows=None, quiet=False):
     ids = []
     skipped_lines = []
 
-    with gzip.open(json_filename, "rb") as jj:
+    total_bytes = os.path.getsize(json_filename)
+    # Open the raw file explicitly so progress can report the *compressed*
+    # bytes consumed: GzipFile.tell() returns the decompressed offset, which
+    # would blow past the file-size total and misrepresent progress.
+    with open(json_filename, "rb") as raw, gzip.open(raw, "rb") as jj:
         line_no = 0
+        rows_parsed = 0
+        last_reported = -1
+        # Throttle: report at most every ~1% of file size (min 64 KiB) so the
+        # callback cost stays negligible on huge files.
+        report_interval = max(total_bytes // 100, 65536)
         while True:
             line_no += 1
-            raw = jj.readline()
-            if not raw:
+            line_bytes = jj.readline()
+            if not line_bytes:
                 break
             try:
-                flow = json.loads(raw.decode("utf-8"))
+                flow = json.loads(line_bytes.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError):
                 skipped_lines.append(line_no)
                 continue
+
+            rows_parsed += 1
+            if progress is not None:
+                # Compressed-bytes progress from the underlying raw file,
+                # not GzipFile.tell() (which is the decompressed offset).
+                bytes_read = raw.tell()
+                if bytes_read - last_reported >= report_interval:
+                    last_reported = bytes_read
+                    progress(bytes_read, total_bytes, rows_parsed)
 
             ids.append(flow["id"])
             row = []
@@ -138,6 +164,7 @@ def read_dataset(
     class_label_pairs=None,
     max_rows=None,
     quiet=False,
+    progress=None,
 ):
     """Walk ``dataset_folder`` for .json.gz files, extract features via
     ``feature_dict``, and optionally attach labels from ``annotation_file``.
@@ -158,7 +185,11 @@ def read_dataset(
             if not quiet:
                 print(f"Reading {f}")
             d, ids, f_names = read_json_gz(
-                os.path.join(root, f), feature_dict, max_rows=max_rows, quiet=quiet
+                os.path.join(root, f),
+                feature_dict,
+                max_rows=max_rows,
+                quiet=quiet,
+                progress=progress,
             )
 
             if len(f_names) > len(feature_names):
@@ -183,13 +214,16 @@ def read_dataset(
 
 
 def get_training_data(
-    training_folder, annotation_file, feature_dict, max_rows=None, quiet=False
+    training_folder, annotation_file, feature_dict, max_rows=None, quiet=False, progress=None
 ):
     """Load training data as (Xtrain, y_train, class_label_pairs, ids).
 
     ``max_rows`` caps rows read (tracer-bullet runs; None = full file). Returns
     the raw float32 numpy array directly — the previous numpy -> pandas ->
     .values round trip doubled peak memory for no benefit.
+
+    ``progress`` (optional) is forwarded to ``read_dataset`` — see
+    ``read_json_gz`` for the (bytes_read, total_bytes, rows_parsed) contract.
     """
     if not quiet:
         print("\nLoading training set ...")
@@ -200,6 +234,7 @@ def get_training_data(
         class_label_pairs=None,
         max_rows=max_rows,
         quiet=quiet,
+        progress=progress,
     )
     return X, y, clp, ids
 

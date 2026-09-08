@@ -172,6 +172,28 @@ def cmd_train(args: argparse.Namespace) -> int:
     limit = getattr(args, "limit", None)
 
     with create_progress() as progress:
+        # Real loading signal: bytes consumed vs. total .gz file size, updated
+        # as each line is streamed and parsed. This JSONL.gz format has no
+        # row-count header, so a row-based total would require a full
+        # decompression pre-pass — bytes-read is the honest signal.
+        _load_state: dict[str, int] = {"total": 0}
+        load_task = None
+
+        def _load_progress(bytes_read: int, total_bytes: int, rows_parsed: int) -> None:
+            _load_state["total"] = total_bytes
+            if load_task is None:
+                return
+            progress.update(
+                load_task,
+                completed=bytes_read,
+                total=total_bytes,
+                description=(
+                    f"[bold]Loading training set[/bold] [dim]"
+                    f"({rows_parsed:,} rows, {bytes_read / 1e6:.1f}/"
+                    f"{total_bytes / 1e6:.1f} MB)[/dim]"
+                ),
+            )
+
         if limit is not None:
             # The raw file is class-grouped, so a plain head cap can yield a single
             # class (unfittable). We escalate the cap until >=2 classes appear,
@@ -186,6 +208,7 @@ def cmd_train(args: argparse.Namespace) -> int:
                 feature_dict,
                 max_rows=limit,
                 quiet=True,
+                progress=_load_progress,
             )
             retries = 0
             while y is not None and len(set(y.tolist())) < 2 and retries < 6:
@@ -204,6 +227,7 @@ def cmd_train(args: argparse.Namespace) -> int:
                     feature_dict,
                     max_rows=_cap,
                     quiet=True,
+                    progress=_load_progress,
                 )
             if y is not None and len(set(y.tolist())) >= 2:
                 import numpy as _np
@@ -215,10 +239,11 @@ def cmd_train(args: argparse.Namespace) -> int:
                 X, y = X[_keep], y[_keep]
             if X is None:
                 raise RunnerError(f"No training data found in {training_folder}")
+            _t = _load_state["total"] or 1
             progress.update(
                 load_task,
-                completed=1,
-                total=1,
+                completed=_t,
+                total=_t,
                 description=(
                     f"[green]Loaded training set[/green] [dim]({len(X):,} rows, "
                     f"{limit}/class, debug run)[/dim]"
@@ -233,13 +258,15 @@ def cmd_train(args: argparse.Namespace) -> int:
                 training_annotations,
                 feature_dict,
                 quiet=True,
+                progress=_load_progress,
             )
             if X is None:
                 raise RunnerError(f"No training data found in {training_folder}")
+            _t = _load_state["total"] or 1
             progress.update(
                 load_task,
-                completed=1,
-                total=1,
+                completed=_t,
+                total=_t,
                 description=(
                     f"[green]Loaded training set[/green] [dim]({len(X):,} rows, full dataset)[/dim]"
                 ),
