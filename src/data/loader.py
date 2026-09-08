@@ -45,7 +45,7 @@ def encode_label(labels, class_label_pairs=None):
     return label_array, class_label_pairs
 
 
-def read_json_gz(json_filename, feature_dict, max_rows=None):
+def read_json_gz(json_filename, feature_dict, max_rows=None, quiet=False):
     """Read one .json.gz file of per-flow JSON records, extracting the features
     listed in ``feature_dict``.
 
@@ -113,10 +113,11 @@ def read_json_gz(json_filename, feature_dict, max_rows=None):
                         feature_header.append(feature)
             blocks.append(np.asarray(row, dtype=np.float32))
             if max_rows is not None and len(blocks) >= max_rows:
-                print(f"Stopped early at max_rows={max_rows} in {json_filename}.")
+                if not quiet:
+                    print(f"Stopped early at max_rows={max_rows} in {json_filename}.")
                 break
 
-    if skipped_lines:
+    if skipped_lines and not quiet:
         print(f"Skipped {len(skipped_lines)} unparseable line(s) in {json_filename}.")
 
     if not blocks:
@@ -136,6 +137,7 @@ def read_dataset(
     annotation_file=None,
     class_label_pairs=None,
     max_rows=None,
+    quiet=False,
 ):
     """Walk ``dataset_folder`` for .json.gz files, extract features via
     ``feature_dict``, and optionally attach labels from ``annotation_file``.
@@ -153,9 +155,10 @@ def read_dataset(
         for f in files:
             if not f.endswith(".json.gz"):
                 continue
-            print(f"Reading {f}")
+            if not quiet:
+                print(f"Reading {f}")
             d, ids, f_names = read_json_gz(
-                os.path.join(root, f), feature_dict, max_rows=max_rows
+                os.path.join(root, f), feature_dict, max_rows=max_rows, quiet=quiet
             )
 
             if len(f_names) > len(feature_names):
@@ -179,20 +182,24 @@ def read_dataset(
     return feature_names, all_ids, data_array, None, class_label_pairs
 
 
-def get_training_data(training_folder, annotation_file, feature_dict, max_rows=None):
+def get_training_data(
+    training_folder, annotation_file, feature_dict, max_rows=None, quiet=False
+):
     """Load training data as (Xtrain, y_train, class_label_pairs, ids).
 
     ``max_rows`` caps rows read (tracer-bullet runs; None = full file). Returns
     the raw float32 numpy array directly — the previous numpy -> pandas ->
     .values round trip doubled peak memory for no benefit.
     """
-    print("\nLoading training set ...")
+    if not quiet:
+        print("\nLoading training set ...")
     _, ids, X, y, clp = read_dataset(
         training_folder,
         feature_dict,
         annotation_file,
         class_label_pairs=None,
         max_rows=max_rows,
+        quiet=quiet,
     )
     return X, y, clp, ids
 

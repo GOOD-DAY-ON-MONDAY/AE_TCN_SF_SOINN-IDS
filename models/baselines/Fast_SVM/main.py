@@ -1,14 +1,10 @@
-"""Minimal SVM baseline — tracer-bullet model for the Runner harness.
+"""Fast Linear SVM baseline — SGD-based tracer-bullet model for the Runner harness.
 
 Implements the v1 contract: ``create_model(cfg)`` factory, ``fit(X, y, X_val=None,
 y_val=None)`` (val ignored), ``predict(X)`` (hard integer indices, pure read), and
 ``save(path)`` (joblib). Not incremental: no ``supports_incremental``,
 ``partial_fit``, or ``predict_and_adapt``.
 
-Uses LinearSVC (liblinear) wrapped in a StandardScaler pipeline, not kernel SVC:
-libsvm's kernel matrix scales O(n^2) in memory (~100+ GB on the ~387k-row
-netml2020 set), while liblinear scales ~linearly. C is read from cfg
-(``cfg.model.<key>`` or ``cfg.<key>``) if present, else the sklearn default 1.0.
 """
 
 from __future__ import annotations
@@ -37,23 +33,31 @@ def _cfg_get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
-class SVMModel:
-    """Non-incremental SVM baseline exposing fit / predict / save."""
+class FastLinearSVMModel:
+    """Non-incremental fast Linear SVM (SGDClassifier) exposing fit / predict / save."""
 
-    def __init__(self, C: float = 1.0):
-        """Build a StandardScaler + LinearSVC pipeline.
+    def __init__(self, alpha: float = 0.0001, max_iter: int = 1000):
+        """Build a StandardScaler + SGDClassifier(loss="hinge") pipeline.
 
         Args:
-            C (float): LinearSVC inverse-regularization strength.
+            alpha (float): L2 regularization penalty multiplier (inversely proportional to C).
+            max_iter (int): Maximum number of passes over the training data.
         """
+        from sklearn.linear_model import SGDClassifier
         from sklearn.pipeline import make_pipeline
         from sklearn.preprocessing import StandardScaler
-        from sklearn.svm import LinearSVC
 
-        # dual="auto" picks the primal solver since n_samples >> n_features.
+        # loss="hinge" trains a Linear Support Vector Machine using SGD in O(n) time.
         self._clf = make_pipeline(
             StandardScaler(),
-            LinearSVC(C=C, dual="auto", max_iter=10000),
+            SGDClassifier(
+                loss="hinge",
+                penalty="l2",
+                alpha=alpha,
+                max_iter=max_iter,
+                random_state=42,
+                n_jobs=-1,
+            ),
         )
 
     def fit(self, X, y, X_val=None, y_val=None):
@@ -70,8 +74,16 @@ class SVMModel:
         joblib.dump(self._clf, path)
 
 
-def create_model(cfg: Any) -> SVMModel:
+def create_model(cfg: Any) -> FastLinearSVMModel:
     # Hyperparameters are optional; model.yaml need not exist.
     model_cfg = _cfg_get(cfg, "model", None)
-    C = _cfg_get(model_cfg, "C", None) or _cfg_get(cfg, "C", 1.0)
-    return SVMModel(C=float(C))
+
+    # Read 'alpha' directly, or convert 'C' (inverse regularization) if passed.
+    alpha = _cfg_get(model_cfg, "alpha", None) or _cfg_get(cfg, "alpha", None)
+    if alpha is None:
+        c_val = _cfg_get(model_cfg, "C", None) or _cfg_get(cfg, "C", 1.0)
+        alpha = 1.0 / float(c_val)
+
+    max_iter = _cfg_get(model_cfg, "max_iter", None) or _cfg_get(cfg, "max_iter", 1000)
+
+    return FastLinearSVMModel(alpha=float(alpha), max_iter=int(max_iter))

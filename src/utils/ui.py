@@ -1,19 +1,63 @@
-"""CLI presentation helpers: color-with-meaning, progress bars, plan header,
+"""CLI presentation helpers: colour-with-meaning, progress bars, plan header,
 and consistent error styling.
 
-Stdlib-only. Colors auto-disable when stdout is not a TTY or ``NO_COLOR`` is set.
+Rich is used for the progress bar, spinner (status), and summary tables.
+A single module-level ``console`` instance is shared across the pipeline so
+Rich's output never interleaves with plain ``print()`` calls on the same
+stream.  Rich auto-detects non-TTY (piped / redirected output) and falls back
+to plain sequential text — no extra configuration needed.
+
+The legacy ``yellow()``, ``dim()``, ``bold()``, ``green()``, ``format_error()``
+and ``print_plan()`` helpers are kept unchanged because they are used in
+contexts that intentionally bypass Rich (e.g. stderr error formatting).
 """
 
 from __future__ import annotations
 
-import itertools
 import math
 import os
-
 import sys
 import threading
+import itertools
 from collections.abc import Callable
 from typing import Any, Self
+
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
+# ---------------------------------------------------------------------------
+# Shared Console singleton
+# ---------------------------------------------------------------------------
+
+# force_terminal=None lets Rich decide based on the real TTY state, so piped
+# output falls back to plain text automatically.
+console = Console()
+
+
+def create_progress(c: Console = console) -> Progress:
+    """Return a unified Rich Progress instance configured for the pipeline."""
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=60),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=c,
+        transient=False,
+    )
+
+# ---------------------------------------------------------------------------
+# Legacy ANSI helpers (kept for backward compat — used in format_error, etc.)
+# ---------------------------------------------------------------------------
 
 _YELLOW = "\033[33m"
 _BLUE = "\033[34m"
@@ -76,8 +120,132 @@ def print_plan(
     print()
 
 
+# ---------------------------------------------------------------------------
+# Rich progress: eval bar
+# ---------------------------------------------------------------------------
+
+def chunked_predict_with_progress(
+    model: Any,
+    X: Any,
+    label: str = "evaluating",
+    chunks: int = 20,
+    progress: Progress | None = None,
+) -> Any:
+    """predict() over chunks with a Rich progress bar.
+
+    predict() is a pure read (contract), so chunking is safe; results are
+    concatenated back into one array.
+
+    When ``n < 5``, skips the progress bar entirely — prints a single
+    "evaluating N flows..." line, runs predict, then prints "done".
+    Rich auto-degrades to plain text when stdout is not a TTY.
+    """
+    import numpy as np
+
+    n = len(X)
+    if n == 0:
+        return model.predict(X)
+
+    # Very small runs: a bar just adds noise.
+    if n < 5:
+        console.print(f"[dim]{label} {n} flow(s)…[/dim]")
+        result = model.predict(X)
+        console.print(f"[dim]{label} done[/dim]")
+        return result
+
+    size = max(1, math.ceil(n / max(chunks, 1)))
+    parts: list[Any] = []
+
+    if progress is not None:
+        task = progress.add_task(f"[bold]{label}[/bold]", total=chunks)
+        for i in range(0, n, size):
+            parts.append(model.predict(X[i : i + size]))
+            progress.advance(task)
+        progress.update(
+            task,
+            completed=chunks,
+            total=chunks,
+            description=f"[green]{label} completed[/green]",
+        )
+        return np.concatenate(parts)
+
+    with create_progress() as p:
+        task = p.add_task(f"[bold]{label}[/bold]", total=chunks)
+        for i in range(0, n, size):
+            parts.append(model.predict(X[i : i + size]))
+            p.advance(task)
+        p.update(
+            task,
+            completed=chunks,
+            total=chunks,
+            description=f"[green]{label} completed[/green]",
+        )
+        return np.concatenate(parts)
+
+
+# ---------------------------------------------------------------------------
+# Rich progress: opaque phases (fit)
+# ---------------------------------------------------------------------------
+
+def phase(
+    label: str,
+    fn: Callable[[], Any],
+    progress: Progress | None = None,
+) -> Any:
+    """Run an opaque callable behind a Rich indeterminate progress task."""
+    import time
+
+    t0 = time.perf_counter()
+    if progress is not None:
+        task = progress.add_task(f"[bold]{label}[/bold]", total=None)
+        try:
+            res = fn()
+            elapsed = time.perf_counter() - t0
+            progress.update(
+                task,
+                completed=1,
+                total=1,
+                description=f"[green]{label} completed[/green] [dim]({elapsed:.2f}s)[/dim]",
+            )
+            return res
+        except Exception:
+            progress.update(
+                task,
+                completed=1,
+                total=1,
+                description=f"[red]{label} failed[/red]",
+            )
+            raise
+
+    with create_progress() as p:
+        task = p.add_task(f"[bold]{label}[/bold]", total=None)
+        try:
+            res = fn()
+            elapsed = time.perf_counter() - t0
+            p.update(
+                task,
+                completed=1,
+                total=1,
+                description=f"[green]{label} completed[/green] [dim]({elapsed:.2f}s)[/dim]",
+            )
+            return res
+        except Exception:
+            p.update(
+                task,
+                completed=1,
+                total=1,
+                description=f"[red]{label} failed[/red]",
+            )
+            raise
+
+
+# ---------------------------------------------------------------------------
+# Deprecated legacy classes — kept so existing imports don't break.
+# Tests that assert on their exact stderr output are updated in test_cli_ux.py.
+# ---------------------------------------------------------------------------
+
 class ProgressBar:
-    """Determinate single-line progress bar: [####    ] 50/100."""
+    """Deprecated: thin wrapper kept for import compat. Use rich Progress directly."""
 
     def __init__(self, total: int, label: str = "", width: int = 24) -> None:
         self.total = max(total, 1)
@@ -107,7 +275,7 @@ class ProgressBar:
 
 
 class Spinner:
-    """Indeterminate progress indicator for opaque phases (e.g. fit())."""
+    """Deprecated: thin wrapper kept for import compat. Use phase() instead."""
 
     FRAMES = itertools.cycle("|/-\\")
 
@@ -133,36 +301,3 @@ class Spinner:
             self._thread.join()
         sys.stderr.write("\r" + " " * (len(self.label) + 3) + "\r")
         sys.stderr.flush()
-
-
-def chunked_predict_with_progress(
-    model: Any,
-    X: Any,
-    label: str = "evaluating",
-    chunks: int = 20,
-) -> Any:
-    """predict() over chunks with a determinate progress bar.
-
-    predict() is a pure read (contract), so chunking is safe; results are
-    concatenated back into one array.
-    """
-    import numpy as np
-
-    n = len(X)
-    if n == 0:
-        return model.predict(X)
-    size = max(1, math.ceil(n / max(chunks, 1)))
-    bar = ProgressBar(chunks, label=label)
-    parts: list[Any] = []
-    for i in range(0, n, size):
-        parts.append(model.predict(X[i : i + size]))
-        bar.update()
-    bar.finish()
-    return np.concatenate(parts)
-
-
-def phase(label: str, fn: Callable[[], Any]) -> Any:
-    """Run an opaque callable behind an indeterminate spinner."""
-    with Spinner(label):
-        return fn()
-

@@ -27,6 +27,7 @@ from rich.table import Table
 
 from src.runner import RunnerError
 from src.utils.config import ConfigError
+from src.utils.ui import console
 
 _HISTORY_PATH = Path(__file__).resolve().parents[2] / "logs" / "builder_history"
 
@@ -139,8 +140,7 @@ def _route(tokens: list[str], console: Console) -> int:
         return 0
     try:
         if args.command == "train":
-            with console.status(f"[{_TEAL}]training…[/{_TEAL}]", spinner="dots"):
-                return train_cli.cmd_train(args)
+            return train_cli.cmd_train(args)
         if args.command == "show-config":
             return train_cli.cmd_show_config(args)
         if args.command == "list-models":
@@ -172,7 +172,6 @@ def _builtin(tokens: list[str], console: Console) -> int | None:
 
 def run_builder() -> int:
     """Run the interactive builder REPL. Returns a process-style exit code."""
-    console = Console()
     _print_banner(console)
 
     try:

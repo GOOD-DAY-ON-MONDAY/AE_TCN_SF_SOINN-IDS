@@ -46,6 +46,7 @@ def test_error_formatting_suggests_the_fix() -> None:
 
 
 def test_progress_bar_renders_counts(capsys: pytest.CaptureFixture) -> None:
+    # ProgressBar is a deprecated wrapper — still exported for compat.
     bar = ProgressBar(4, label="evaluating")
     for _ in range(4):
         bar.update()
@@ -55,6 +56,7 @@ def test_progress_bar_renders_counts(capsys: pytest.CaptureFixture) -> None:
 
 
 def test_spinner_runs_and_clears() -> None:
+    # Spinner is a deprecated wrapper — still exported for compat.
     with Spinner("training"):
         pass  # enter/exit without error
 
@@ -71,7 +73,30 @@ def test_chunked_predict_with_progress_concatenates(
     X = np.arange(10)
     out = chunked_predict_with_progress(Stub(), X, chunks=5)
     assert list(out) == [0] * 10
-    assert "5/5" in capsys.readouterr().err
+    # Rich writes to stdout (console).  In a non-TTY pytest context Rich
+    # renders plain text; MofNCompleteColumn emits "5/5".
+    captured = capsys.readouterr()
+    assert "5/5" in captured.out or "5/5" in captured.err
+
+
+def test_chunked_predict_tiny_skips_bar(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """n < 5: no progress bar, just a one-liner."""
+
+    class Stub:
+        def predict(self, X):
+            import numpy as np
+
+            return np.ones(len(X), dtype=int)
+
+    X = np.arange(3)
+    out = chunked_predict_with_progress(Stub(), X, chunks=5)
+    assert list(out) == [1, 1, 1]
+    captured = capsys.readouterr()
+    # Should print a plain "evaluating N flow(s)…" line, not a progress bar.
+    all_out = captured.out + captured.err
+    assert "evaluating" in all_out
 
 
 def test_run_single_seed_prints_summary_table(
@@ -94,6 +119,8 @@ def test_run_single_seed_prints_summary_table(
         report_root=tmp_path / "artifacts",
         csv_path=tmp_path / "all_runs.csv",
     )
-    out = capsys.readouterr().out
-    assert "=== Run summary ===" in out
-    assert "accuracy" in out
+    captured = capsys.readouterr()
+    # Rich Panel prints to stdout; the panel title contains "Run summary".
+    all_out = captured.out + captured.err
+    assert "Run summary" in all_out
+    assert "accuracy" in all_out

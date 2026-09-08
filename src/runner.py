@@ -211,7 +211,7 @@ RUN_COLUMNS = (
     "timestamp",
 )
 
-from src.utils.ui import chunked_predict_with_progress, phase
+from src.utils.ui import chunked_predict_with_progress, console, phase
 from src.utils.ui import yellow as _yellow
 
 
@@ -299,14 +299,12 @@ def run_zero_day_loop(
     zero_day_classes = list(_cfg_get(zd_cfg, dataset, []) or [])
 
     if not zero_day_classes:
-        print(
-            _yellow(
-                f"zero-day loop skipped (no zero-day classes configured for {dataset})"
-            )
+        console.print(
+            f"[yellow]zero-day loop skipped (no zero-day classes configured for {dataset})[/yellow]"
         )
         return None
     if not getattr(model, "supports_incremental", False):
-        print(_yellow("zero-day loop skipped (not an incremental model)"))
+        console.print("[yellow]zero-day loop skipped (not an incremental model)[/yellow]")
         return None
 
     ds_cfg = _cfg_get(_cfg_get(cfg, "data"), dataset)
@@ -316,11 +314,9 @@ def run_zero_day_loop(
     known_labels = sorted(set(np.asarray(y_known).tolist()) - zd_indices)
 
     if len(X_withheld) == 0 or len(X_known) == 0:
-        print(
-            _yellow(
-                "zero-day loop skipped (no withheld/known samples in "
-                "the evaluation split)"
-            )
+        console.print(
+            "[yellow]zero-day loop skipped (no withheld/known samples in "
+            "the evaluation split)[/yellow]"
         )
         return None
 
@@ -379,6 +375,7 @@ def run_single_seed(
     y_test: Any = None,
     report_root: str | Path | None = None,
     csv_path: str | Path | None = None,
+    progress: Any = None,
 ) -> dict[str, Any]:
     """One full train -> predict -> evaluate cycle.
 
@@ -387,6 +384,7 @@ def run_single_seed(
     appended to all_runs.csv.
     """
     import csv
+    import inspect
     import json
     import time
     from datetime import datetime, timezone
@@ -398,25 +396,55 @@ def run_single_seed(
     model = load_model(model_dir, cfg)
     validate_model(model, model_dir)
 
-    # ---- fit (per-phase progress: indeterminate spinner) ----------------
+    # ---- fit (per-phase progress: indeterminate spinner or step callback)
     t0 = time.perf_counter()
-    phase("training", lambda: model.fit(X_train, y_train, X_val=X_val, y_val=y_val))
-    train_time_s = time.perf_counter() - t0
+    fit_kwargs = {"X_val": X_val, "y_val": y_val}
+    sig = inspect.signature(model.fit)
+    if progress is not None and ("progress_callback" in sig.parameters or "callback" in sig.parameters):
+        train_task = progress.add_task(f"[bold]training[/bold] [dim]({model_dir.name})[/dim]", total=None)
+
+        def _cb(advance: int = 1, total: int | None = None, description: str | None = None) -> None:
+            kw: dict[str, Any] = {"advance": advance}
+            if total is not None:
+                kw["total"] = total
+            if description is not None:
+                kw["description"] = description
+            progress.update(train_task, **kw)
+
+        cb_name = "progress_callback" if "progress_callback" in sig.parameters else "callback"
+        fit_kwargs[cb_name] = _cb
+        try:
+            model.fit(X_train, y_train, **fit_kwargs)
+        finally:
+            train_time_s = time.perf_counter() - t0
+            progress.update(
+                train_task,
+                completed=1,
+                total=1,
+                description=f"[green]training completed[/green] [dim]({train_time_s:.2f}s)[/dim]",
+            )
+    else:
+        phase(
+            f"training [dim]({model_dir.name})[/dim]",
+            lambda: model.fit(X_train, y_train, **fit_kwargs),
+            progress=progress,
+        )
+        train_time_s = time.perf_counter() - t0
 
     # ---- evaluate (test if wired, else val — blocker documented) --------
     if X_test is not None:
         X_eval, y_eval = X_test, y_test
     else:
         X_eval, y_eval = X_val, y_val
-        print(
-            _yellow(
-                "note: test data unavailable (labels_available: false); "
-                "evaluating on the validation split"
-            )
+        console.print(
+            "[yellow]note: test data unavailable (labels_available: false); "
+            "evaluating on the validation split[/yellow]"
         )
 
     # ---- testing phase: chunked predict with a determinate bar ----------
-    y_pred = chunked_predict_with_progress(model, X_eval, label="evaluating")
+    y_pred = chunked_predict_with_progress(
+        model, X_eval, label="evaluating", progress=progress
+    )
     check_predict_contract(model, X_eval)
     y_eval = np.asarray(y_eval).reshape(-1)
     y_pred = np.asarray(y_pred).reshape(-1)
@@ -468,7 +496,7 @@ def run_single_seed(
         rel = Path(model_dir.name)
     run_dir = root / rel / dataset / f"seed_{seed}"
     if run_dir.exists():
-        print(_yellow(f"overwriting existing run directory: {run_dir}"))
+        console.print(f"[yellow]overwriting existing run directory: {run_dir}[/yellow]")
         import shutil
 
         shutil.rmtree(run_dir)
@@ -541,25 +569,56 @@ def run_single_seed(
 
 
 def _print_summary(row: dict[str, Any], n_eval: int) -> None:
-    """Print the end-of-run summary block from a run row."""
-    print("\n=== Run summary ===")
-    print(f"  model:       {row['model']}")
-    print(f"  dataset:     {row['dataset']}   seed: {row['seed']}")
-    print(f"  eval flows:  {n_eval}")
-    for key in (
-        "accuracy",
-        "precision",
-        "recall",
-        "f1",
-        "macro_precision",
-        "macro_recall",
-        "macro_f1",
-    ):
-        print(f"  {key:16s} {row[key]:.4f}")
-    print(f"  {'latency_ms':16s} {row['latency_ms']:.4f}")
-    print(f"  {'peak_mem_gb':16s} {row['peak_mem_gb']:.4f}")
-    print(f"  {'train_time_s':16s} {row['train_time_s']:.4f}")
-    print(f"  run_dir:     {row['run_dir']}")
+    """Print the end-of-run summary as two side-by-side Rich tables in a Panel."""
+    from rich import box
+    from rich.columns import Columns
+    from rich.panel import Panel
+    from rich.table import Table
+
+    def _make_table(title: str, metrics: dict[str, float]) -> Table:
+        t = Table(title=title, box=box.SIMPLE_HEAVY, show_header=False, title_style="bold")
+        t.add_column("metric", style="dim", no_wrap=True)
+        t.add_column("value", justify="right", style="bold green")
+        for k, v in metrics.items():
+            t.add_row(k, f"{v:.4f}")
+        return t
+
+    classification = _make_table(
+        "Classification",
+        {
+            "accuracy": row["accuracy"],
+            "precision": row["precision"],
+            "recall": row["recall"],
+            "f1": row["f1"],
+            "macro_precision": row["macro_precision"],
+            "macro_recall": row["macro_recall"],
+            "macro_f1": row["macro_f1"],
+        },
+    )
+    performance = _make_table(
+        "Performance",
+        {
+            "latency_ms": row["latency_ms"],
+            "peak_mem_gb": row["peak_mem_gb"],
+            "train_time_s": row["train_time_s"],
+        },
+    )
+
+    # Use a relative run_dir in the subtitle to keep lines short.
+    try:
+        rel_run_dir = str(Path(row["run_dir"]).relative_to(REPO_ROOT))
+    except ValueError:
+        rel_run_dir = row["run_dir"]
+
+    model_name = Path(row["model"]).name
+    console.print(
+        Panel.fit(
+            Columns([classification, performance], equal=False, expand=False),
+            title=f"[bold]Run summary[/bold] — {model_name} / {row['dataset']} / seed {row['seed']}",
+            subtitle=f"eval flows: {n_eval}  ·  run_dir: {rel_run_dir}",
+            border_style="blue",
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -597,10 +656,42 @@ def aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, tuple[float, float]]
 
 
 def print_aggregate(agg: dict[str, tuple[float, float]], n_seeds: int) -> None:
-    """Print the mean ± std summary across seeds (no teammate code needed)."""
-    print(f"\n=== Aggregated over {n_seeds} seed(s) ===")
-    for key, (mean, std) in agg.items():
-        print(f"  {key:16s} {mean:.4f} ± {std:.4f}")
+    """Print the mean ± std aggregation as a Rich table."""
+    from rich import box
+    from rich.columns import Columns
+    from rich.panel import Panel
+    from rich.table import Table
+
+    def _agg_table(title: str, keys: tuple[str, ...]) -> Table:
+        t = Table(title=title, box=box.SIMPLE_HEAVY, title_style="bold")
+        t.add_column("metric", style="dim", no_wrap=True)
+        t.add_column("mean", justify="right", style="bold green")
+        t.add_column("± std", justify="right", style="dim")
+        for k in keys:
+            mean, std = agg[k]
+            t.add_row(k, f"{mean:.4f}", f"{std:.4f}")
+        return t
+
+    classification_keys = (
+        "accuracy", "precision", "recall", "f1",
+        "macro_precision", "macro_recall", "macro_f1",
+    )
+    performance_keys = ("latency_ms", "peak_mem_gb", "train_time_s")
+
+    console.print(
+        Panel.fit(
+            Columns(
+                [
+                    _agg_table("Classification", classification_keys),
+                    _agg_table("Performance", performance_keys),
+                ],
+                equal=False,
+                expand=False,
+            ),
+            title=f"[bold]Aggregated over {n_seeds} seed(s)[/bold]",
+            border_style="blue",
+        )
+    )
 
 
 def run_seeds(
@@ -616,6 +707,7 @@ def run_seeds(
     y_test: Any = None,
     report_root: str | Path | None = None,
     csv_path: str | Path | None = None,
+    progress: Any = None,
 ) -> list[dict[str, Any]]:
     """One Run per seed, aggregated into mean ± std.
 
@@ -638,6 +730,7 @@ def run_seeds(
             y_test=y_test,
             report_root=report_root,
             csv_path=csv_path,
+            progress=progress,
         )
         for seed in seeds
     ]

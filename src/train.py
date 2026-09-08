@@ -22,6 +22,7 @@ from src.runner import (
     resolve_model,
 )
 from src.utils.config import load_merged_config
+from src.utils.ui import console
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -150,81 +151,113 @@ def cmd_train(args: argparse.Namespace) -> int:
     from src.data.loader import get_training_data
     from src.data.seam import assemble_run_arrays
     from src.runner import run_seeds
+    from src.utils.ui import create_progress
+
+    from src.utils.config import REPO_ROOT
 
     ds_cfg = getattr(cfg.data, dataset)
-    with open("configs/feature_meta.json") as fh:
+    meta_path = REPO_ROOT / "configs" / "feature_meta.json"
+    if not meta_path.is_file():
+        meta_path = Path("configs/feature_meta.json")
+    with open(meta_path) as fh:
         feature_dict = _json.load(fh)
-    # read_dataset() walks a folder of .json.gz files; the config stores the
-    # training file path, so use its parent dir (raw_dir would also sweep the
-    # test sets, which must stay out of training).
-    training_folder = str(Path(ds_cfg.training_set).parent)
-    # Tracer-bullet mode: the raw file is class-grouped, so a head cap would
-    # miss classes; load full and subsample deterministically per seed.
-    _sample_rows = 50000
+    def _resolve_data_path(p: str | Path) -> str:
+        path = Path(p)
+        if not path.is_absolute() and (REPO_ROOT / path).exists():
+            return str(REPO_ROOT / path)
+        return str(path)
+
+    training_folder = str(Path(_resolve_data_path(ds_cfg.training_set)).parent)
+    training_annotations = _resolve_data_path(ds_cfg.training_annotations)
     limit = getattr(args, "limit", None)
-    if limit is not None:
-        X, y, _, _ = get_training_data(
-            training_folder,
-            ds_cfg.training_annotations,
-            feature_dict,
-            max_rows=limit,
-        )
-        # The raw file is class-grouped, so a plain head cap can yield a single
-        # class (unfittable). Re-read with a growing cap until at least 2 classes
-        # appear, then keep the first `limit` rows per class.
-        retries = 0
-        while y is not None and len(set(y.tolist())) < 2 and retries < 6:
-            retries += 1
-            _cap = min(limit * (4**retries), 10**9)
-            print(
-                f"--limit: first {limit} rows contain a single class "
-                f"(file is class-grouped); re-reading with cap {_cap} ..."
+
+    with create_progress() as progress:
+        if limit is not None:
+            # The raw file is class-grouped, so a plain head cap can yield a single
+            # class (unfittable). We escalate the cap until >=2 classes appear,
+            # updating the progress task description in place.
+            load_task = progress.add_task(
+                f"[bold]Loading training set[/bold] [dim](--limit {limit})[/dim]",
+                total=None,
             )
             X, y, _, _ = get_training_data(
                 training_folder,
-                ds_cfg.training_annotations,
+                training_annotations,
                 feature_dict,
-                max_rows=_cap,
+                max_rows=limit,
+                quiet=True,
             )
-        if y is not None and len(set(y.tolist())) >= 2:
-            import numpy as _np
+            retries = 0
+            while y is not None and len(set(y.tolist())) < 2 and retries < 6:
+                retries += 1
+                _cap = min(limit * (4**retries), 10**9)
+                progress.update(
+                    load_task,
+                    description=(
+                        f"[bold]Loading training set[/bold] [dim](--limit {limit}: "
+                        f"class-grouped file, escalating cap \u2192 {_cap:,})[/dim]"
+                    ),
+                )
+                X, y, _, _ = get_training_data(
+                    training_folder,
+                    training_annotations,
+                    feature_dict,
+                    max_rows=_cap,
+                    quiet=True,
+                )
+            if y is not None and len(set(y.tolist())) >= 2:
+                import numpy as _np
 
-            _keep = _np.zeros(len(y), dtype=bool)
-            for _cls in set(y.tolist()):
-                _idx = _np.flatnonzero(y == _cls)[:limit]
-                _keep[_idx] = True
-            X, y = X[_keep], y[_keep]
-        print(
-            f"--limit: using {len(X)} row(s) of training data (debug run, first {limit}/class)"
-        )
-    else:
-        X, y, _, _ = get_training_data(
-            training_folder,
-            ds_cfg.training_annotations,
-            feature_dict,
-        )
-        if len(X) > _sample_rows:
-            import numpy as _np
-
-            _rng = _np.random.default_rng(seed)
-            _idx = _np.sort(_rng.choice(len(X), size=_sample_rows, replace=False))
-            X, y = X[_idx], y[_idx]
-            print(
-                f"tracer run: sampled {_sample_rows} of 387268 loaded rows (seed {seed})"
+                _keep = _np.zeros(len(y), dtype=bool)
+                for _cls in set(y.tolist()):
+                    _idx = _np.flatnonzero(y == _cls)[:limit]
+                    _keep[_idx] = True
+                X, y = X[_keep], y[_keep]
+            if X is None:
+                raise RunnerError(f"No training data found in {training_folder}")
+            progress.update(
+                load_task,
+                completed=1,
+                total=1,
+                description=(
+                    f"[green]Loaded training set[/green] [dim]({len(X):,} rows, "
+                    f"{limit}/class, debug run)[/dim]"
+                ),
+            )
+        else:
+            load_task = progress.add_task(
+                "[bold]Loading training set[/bold]", total=None
+            )
+            X, y, _, _ = get_training_data(
+                training_folder,
+                training_annotations,
+                feature_dict,
+                quiet=True,
+            )
+            if X is None:
+                raise RunnerError(f"No training data found in {training_folder}")
+            progress.update(
+                load_task,
+                completed=1,
+                total=1,
+                description=(
+                    f"[green]Loaded training set[/green] [dim]({len(X):,} rows, full dataset)[/dim]"
+                ),
             )
 
-    arrays = assemble_run_arrays(X, y, cfg.splitting.val_split, seed)
+        arrays = assemble_run_arrays(X, y, cfg.splitting.val_split, seed)
 
-    run_seeds(
-        model_dir=model_dir,
-        dataset=dataset,
-        seeds=seeds,
-        cfg=cfg,
-        X_train=arrays.X_train,
-        y_train=arrays.y_train,
-        X_val=arrays.X_val,
-        y_val=arrays.y_val,
-    )
+        run_seeds(
+            model_dir=model_dir,
+            dataset=dataset,
+            seeds=seeds,
+            cfg=cfg,
+            X_train=arrays.X_train,
+            y_train=arrays.y_train,
+            X_val=arrays.X_val,
+            y_val=arrays.y_val,
+            progress=progress,
+        )
     return 0
 
 
