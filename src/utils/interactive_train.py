@@ -32,16 +32,15 @@ _AMBER = "#E5C07B"
 def discover_models(root: Path = _MODELS_ROOT) -> list[Path]:
     """Return directories under ``root`` that contain a ``main.py``.
 
-    Skips hidden directories and ``__pycache__``; returns paths relative to
-    the repo root so they are directly usable as ``--model`` arguments.
+    Delegates to the Runner-owned seam and relativizes for ``--model`` use.
     """
-    repo_root = root.parent
+    from src.runner import discover_models as _canonical
+
+    repo_root = Path(root).parent
     found: list[Path] = []
-    for main_py in sorted(root.glob("*/**/main.py")):
-        model_dir = main_py.parent
-        parts = {p.name for p in model_dir.parents} | {model_dir.name}
-        if "__pycache__" in parts or any(
-            p.name.startswith(".") for p in model_dir.parents
+    for model_dir in _canonical(root):
+        if "__pycache__" in model_dir.parts or any(
+            part.startswith(".") for part in model_dir.parts
         ):
             continue
         try:
