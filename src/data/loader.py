@@ -45,7 +45,9 @@ def encode_label(labels, class_label_pairs=None):
     return label_array, class_label_pairs
 
 
-def read_json_gz(json_filename, feature_dict, max_rows=None, quiet=False, progress=None):
+def read_json_gz(
+    json_filename, feature_dict, max_rows=None, quiet=False, progress=None
+):
     """Read one .json.gz file of per-flow JSON records, extracting the features
     listed in ``feature_dict``.
 
@@ -214,7 +216,12 @@ def read_dataset(
 
 
 def get_training_data(
-    training_folder, annotation_file, feature_dict, max_rows=None, quiet=False, progress=None
+    training_folder,
+    annotation_file,
+    feature_dict,
+    max_rows=None,
+    quiet=False,
+    progress=None,
 ):
     """Load training data as (Xtrain, y_train, class_label_pairs, ids).
 
@@ -237,6 +244,3 @@ def get_training_data(
         progress=progress,
     )
     return X, y, clp, ids
-
-
-

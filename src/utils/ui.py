@@ -14,11 +14,11 @@ contexts that intentionally bypass Rich (e.g. stderr error formatting).
 
 from __future__ import annotations
 
+import itertools
 import math
 import os
 import sys
 import threading
-import itertools
 from collections.abc import Callable
 from typing import Any, Self
 
@@ -54,6 +54,7 @@ def create_progress(c: Console = console) -> Progress:
         console=c,
         transient=False,
     )
+
 
 # ---------------------------------------------------------------------------
 # Legacy ANSI helpers (kept for backward compat — used in format_error, etc.)
@@ -133,6 +134,7 @@ def print_plan(
 # Rich progress: eval bar
 # ---------------------------------------------------------------------------
 
+
 def chunked_predict_with_progress(
     model: Any,
     X: Any,
@@ -196,6 +198,7 @@ def chunked_predict_with_progress(
 # Rich progress: opaque phases (fit)
 # ---------------------------------------------------------------------------
 
+
 def phase(
     label: str,
     fn: Callable[[], Any],
@@ -252,6 +255,7 @@ def phase(
 # Deprecated legacy classes — kept so existing imports don't break.
 # Tests that assert on their exact stderr output are updated in test_cli_ux.py.
 # ---------------------------------------------------------------------------
+
 
 class ProgressBar:
     """Deprecated: thin wrapper kept for import compat. Use rich Progress directly."""

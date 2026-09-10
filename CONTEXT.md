@@ -171,3 +171,30 @@ the consistent end-of-run summary table, per-phase progress bars
 during training AND testing, and the visual-polish notes on panels
 and consistent iconography. That file's content is unchanged by this
 round of decisions and still applies as-is.
+---
+
+## Language
+
+**Baseline**:
+An independent reference classifier outside the proposed architecture family.
+_Avoid_: ablation, proposed model
+
+**Ablation**:
+An architecture-family variant that swaps or removes one proposed piece to isolate its contribution.
+_Avoid_: baseline, full model
+
+**Proposed**:
+The full AE plus TCN plus SF-SOINN pipeline under comparison.
+_Avoid_: ablation, baseline
+
+**Shared module**:
+A single implementation of AE, PCA, TCN, or SF-SOINN reused by multiple models.
+_Avoid_: duplicated copy, per-model fork
+
+**Thin wrapper**:
+A model directory that only composes shared modules via its factory without duplicating training logic.
+_Avoid_: standalone implementation, fork
+
+**PCA wrapper**:
+A shared module honoring the standard fit contract with a one-shot deterministic transform.
+_Avoid_: epoch-trained reducer, fake trainer

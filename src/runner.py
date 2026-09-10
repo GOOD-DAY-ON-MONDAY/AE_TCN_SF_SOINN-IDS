@@ -212,7 +212,6 @@ RUN_COLUMNS = (
 )
 
 from src.utils.ui import chunked_predict_with_progress, console, phase
-from src.utils.ui import yellow as _yellow
 
 
 def _peak_mem_gb() -> float:
@@ -304,7 +303,9 @@ def run_zero_day_loop(
         )
         return None
     if not getattr(model, "supports_incremental", False):
-        console.print("[yellow]zero-day loop skipped (not an incremental model)[/yellow]")
+        console.print(
+            "[yellow]zero-day loop skipped (not an incremental model)[/yellow]"
+        )
         return None
 
     ds_cfg = _cfg_get(_cfg_get(cfg, "data"), dataset)
@@ -400,7 +401,9 @@ def run_single_seed(
     t0 = time.perf_counter()
     fit_kwargs = {"X_val": X_val, "y_val": y_val}
     sig = inspect.signature(model.fit)
-    if progress is not None and ("progress_callback" in sig.parameters or "callback" in sig.parameters):
+    if progress is not None and (
+        "progress_callback" in sig.parameters or "callback" in sig.parameters
+    ):
         # Epoch/iteration-based model: fit() reports real steps through the
         # callback (advance=1 per epoch/batch, total=epochs). The bar moves
         # only when the model actually reports a step — never synthetically.
@@ -410,7 +413,9 @@ def run_single_seed(
             total=None,
         )
 
-        def _cb(advance: int = 1, total: int | None = None, description: str | None = None) -> None:
+        def _cb(
+            advance: int = 1, total: int | None = None, description: str | None = None
+        ) -> None:
             """Forward one model progress step to the Rich train task.
 
             Args:
@@ -425,7 +430,9 @@ def run_single_seed(
                 kw["description"] = description
             progress.update(train_task, **kw)
 
-        cb_name = "progress_callback" if "progress_callback" in sig.parameters else "callback"
+        cb_name = (
+            "progress_callback" if "progress_callback" in sig.parameters else "callback"
+        )
         fit_kwargs[cb_name] = _cb
         try:
             model.fit(X_train, y_train, **fit_kwargs)
@@ -604,7 +611,9 @@ def _print_summary(row: dict[str, Any], n_eval: int) -> None:
         Returns:
             Table: Rich table for the run summary panel.
         """
-        t = Table(title=title, box=box.SIMPLE_HEAVY, show_header=False, title_style="bold")
+        t = Table(
+            title=title, box=box.SIMPLE_HEAVY, show_header=False, title_style="bold"
+        )
         t.add_column("metric", style="dim", no_wrap=True)
         t.add_column("value", justify="right", style="bold green")
         for k, v in metrics.items():
@@ -710,8 +719,13 @@ def print_aggregate(agg: dict[str, tuple[float, float]], n_seeds: int) -> None:
         return t
 
     classification_keys = (
-        "accuracy", "precision", "recall", "f1",
-        "macro_precision", "macro_recall", "macro_f1",
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "macro_precision",
+        "macro_recall",
+        "macro_f1",
     )
     performance_keys = ("latency_ms", "peak_mem_gb", "train_time_s")
 

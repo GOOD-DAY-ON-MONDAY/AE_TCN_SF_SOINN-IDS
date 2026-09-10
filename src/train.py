@@ -22,7 +22,6 @@ from src.runner import (
     resolve_model,
 )
 from src.utils.config import load_merged_config
-from src.utils.ui import console
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -151,9 +150,8 @@ def cmd_train(args: argparse.Namespace) -> int:
     from src.data.loader import get_training_data
     from src.data.seam import assemble_run_arrays
     from src.runner import run_seeds
-    from src.utils.ui import create_progress
-
     from src.utils.config import REPO_ROOT
+    from src.utils.ui import create_progress
 
     ds_cfg = getattr(cfg.data, dataset)
     meta_path = REPO_ROOT / "configs" / "feature_meta.json"
@@ -161,6 +159,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         meta_path = Path("configs/feature_meta.json")
     with open(meta_path) as fh:
         feature_dict = _json.load(fh)
+
     def _resolve_data_path(p: str | Path) -> str:
         """Resolve ``p`` against the repo root when relative.
 
