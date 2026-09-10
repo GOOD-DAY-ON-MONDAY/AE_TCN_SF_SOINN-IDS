@@ -1,0 +1,15 @@
+{
+  "zero_day_classes": [
+    "Sality",
+    "Ramnit",
+    "Cobalt",
+    "Downware",
+    "TrojanDownloader"
+  ],
+  "n_withheld": 1450,
+  "n_known": 56632,
+  "flagged_unknown_rate": 0,
+  "retention_prediction_stability": 0.8433747704478034,
+  "post_teach_known_accuracy": 0.6947132363328153,
+  "used_predict_and_adapt": false
+}
