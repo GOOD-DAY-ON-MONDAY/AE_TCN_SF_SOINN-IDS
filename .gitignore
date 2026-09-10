@@ -14,3 +14,5 @@ issues/
 .roo/
 .scratch/
 logs/builder_history
+code
+vscode_cli.tar.gz
