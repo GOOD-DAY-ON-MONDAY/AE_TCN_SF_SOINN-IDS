@@ -316,6 +316,13 @@ def write_class_counts_csv(rows: list[tuple[str, str, int]], out_path: Path) -> 
 
 
 def print_class_summary(dataset_name: str, counts: Counter[str], total: int) -> None:
+    """Print per-class counts and percentages, most-common first.
+
+    Args:
+        dataset_name (str): label shown in the header.
+        counts (Counter[str]): flows per class name.
+        total (int): total flows; denominator for percentages.
+    """
     print(
         f"\n=== {dataset_name}: class distribution "
         f"({total:,} flows, {len(counts)} classes) ==="
@@ -326,6 +333,11 @@ def print_class_summary(dataset_name: str, counts: Counter[str], total: int) -> 
 
 
 def main() -> int:
+    """Validate training data and emit counts, charts, and CSV.
+
+    Returns:
+        int: process exit code (0 on success, 1 on config or load failure).
+    """
     try:
         cfg = load_config()
     except ConfigError as exc:

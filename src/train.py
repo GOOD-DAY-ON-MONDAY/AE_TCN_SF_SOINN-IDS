@@ -162,6 +162,14 @@ def cmd_train(args: argparse.Namespace) -> int:
     with open(meta_path) as fh:
         feature_dict = _json.load(fh)
     def _resolve_data_path(p: str | Path) -> str:
+        """Resolve ``p`` against the repo root when relative.
+
+        Args:
+            p (str | Path): configured path, absolute or repo-relative.
+
+        Returns:
+            str: absolute path when the repo-relative file exists, else ``p`` unchanged.
+        """
         path = Path(p)
         if not path.is_absolute() and (REPO_ROOT / path).exists():
             return str(REPO_ROOT / path)
@@ -180,6 +188,13 @@ def cmd_train(args: argparse.Namespace) -> int:
         load_task = None
 
         def _load_progress(bytes_read: int, total_bytes: int, rows_parsed: int) -> None:
+            """Reflect loader byte progress on the Rich load task.
+
+            Args:
+                bytes_read (int): bytes consumed so far.
+                total_bytes (int): total compressed bytes.
+                rows_parsed (int): rows parsed, shown in the label.
+            """
             _load_state["total"] = total_bytes
             if load_task is None:
                 return
@@ -361,6 +376,13 @@ def _yaml_with_sources(merged: dict, sources: dict[str, str]) -> str:
     lines: list[str] = []
 
     def walk(node: Any, prefix: str, indent: int) -> None:
+        """Append ``node`` as YAML lines with per-leaf source markers.
+
+        Args:
+            node (Any): current mapping level.
+            prefix (str): dotted key prefix for source lookup.
+            indent (int): nesting depth for padding.
+        """
         for key, value in node.items():
             path = f"{prefix}{key}"
             pad = "  " * indent

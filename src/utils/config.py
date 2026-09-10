@@ -58,6 +58,14 @@ def _require(mapping: Mapping[str, Any], key: str, path: str) -> Any:
 
 
 def _validate(cfg: Mapping[str, Any]) -> None:
+    """Check required sections, dataset keys, and feature/class invariants.
+
+    Args:
+        cfg (Mapping[str, Any]): parsed YAML mapping.
+
+    Raises:
+        ConfigError: on any missing key or violated invariant.
+    """
     for section in ("data", "splitting", "model", "training", "device"):
         _require(cfg, section, section)
 
@@ -212,6 +220,17 @@ def load_merged_config(
 
 
 def _load_yaml_mapping(path: str | Path) -> dict:
+    """Load a YAML mapping; empty files yield {}.
+
+    Args:
+        path (str | Path): file to read.
+
+    Returns:
+        dict: parsed mapping.
+
+    Raises:
+        ConfigError: when missing or not a mapping.
+    """
     path = Path(path)
     if not path.is_file():
         raise ConfigError(f"Config file not found: '{path}'")

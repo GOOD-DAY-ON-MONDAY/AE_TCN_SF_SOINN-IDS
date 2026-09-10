@@ -73,6 +73,15 @@ def color_enabled() -> bool:
 
 
 def _paint(code: str, msg: str) -> str:
+    """Wrap ``msg`` in ``code`` when color is enabled.
+
+    Args:
+        code (str): ANSI code prefix.
+        msg (str): message to style.
+
+    Returns:
+        str: styled or unchanged message.
+    """
     return f"{code}{msg}{_RESET}" if color_enabled() else msg
 
 
@@ -248,6 +257,13 @@ class ProgressBar:
     """Deprecated: thin wrapper kept for import compat. Use rich Progress directly."""
 
     def __init__(self, total: int, label: str = "", width: int = 24) -> None:
+        """Store total, label, and width (deprecated compat).
+
+        Args:
+            total (int): expected steps (floored at 1).
+            label (str): prefix shown before the bar.
+            width (int): bar character width.
+        """
         self.total = max(total, 1)
         self.label = label
         self.width = width
@@ -255,10 +271,16 @@ class ProgressBar:
         self._is_tty = sys.stderr.isatty()
 
     def update(self, amount: int = 1) -> None:
+        """Advance the bar and re-render (deprecated compat).
+
+        Args:
+            amount (int): steps to add.
+        """
         self._n = min(self._n + amount, self.total)
         self.render()
 
     def render(self) -> None:
+        """Draw the current bar state to stderr (deprecated compat)."""
         frac = self._n / self.total
         filled = int(frac * self.width)
         bar = "#" * filled + "-" * (self.width - filled)
@@ -270,6 +292,7 @@ class ProgressBar:
         stream.flush()
 
     def finish(self) -> None:
+        """Complete the bar and render once (deprecated compat)."""
         self._n = self.total
         self.render()
 
@@ -280,22 +303,38 @@ class Spinner:
     FRAMES = itertools.cycle("|/-\\")
 
     def __init__(self, label: str) -> None:
+        """Store the spinner label (deprecated compat).
+
+        Args:
+            label (str): text shown beside the frame.
+        """
         self.label = label
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     def __enter__(self) -> Self:
+        """Start the background frame thread.
+
+        Returns:
+            Self: this spinner for ``with`` use.
+        """
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
         return self
 
     def _spin(self) -> None:
+        """Emit frames until stopped (deprecated compat)."""
         while not self._stop.wait(0.1):
             frame = next(self.FRAMES)
             sys.stderr.write(f"\r{self.label} {frame}")
             sys.stderr.flush()
 
     def __exit__(self, *exc: object) -> None:
+        """Stop the thread and clear the line (deprecated compat).
+
+        Args:
+            exc (object): ignored exception triple parts.
+        """
         self._stop.set()
         if self._thread is not None:
             self._thread.join()

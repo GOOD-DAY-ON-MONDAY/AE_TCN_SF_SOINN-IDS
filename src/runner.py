@@ -411,6 +411,13 @@ def run_single_seed(
         )
 
         def _cb(advance: int = 1, total: int | None = None, description: str | None = None) -> None:
+            """Forward one model progress step to the Rich train task.
+
+            Args:
+                advance (int): steps completed since last call.
+                total (int | None): reset the task total when known.
+                description (str | None): replace the task label when given.
+            """
             kw: dict[str, Any] = {"advance": advance}
             if total is not None:
                 kw["total"] = total
@@ -588,6 +595,15 @@ def _print_summary(row: dict[str, Any], n_eval: int) -> None:
     from rich.table import Table
 
     def _make_table(title: str, metrics: dict[str, float]) -> Table:
+        """Build a two-column metric table with 4-decimal values.
+
+        Args:
+            title (str): table title.
+            metrics (dict[str, float]): metric name to value.
+
+        Returns:
+            Table: Rich table for the run summary panel.
+        """
         t = Table(title=title, box=box.SIMPLE_HEAVY, show_header=False, title_style="bold")
         t.add_column("metric", style="dim", no_wrap=True)
         t.add_column("value", justify="right", style="bold green")
@@ -675,6 +691,15 @@ def print_aggregate(agg: dict[str, tuple[float, float]], n_seeds: int) -> None:
     from rich.table import Table
 
     def _agg_table(title: str, keys: tuple[str, ...]) -> Table:
+        """Build a mean ± std table for ``keys`` from the closure ``agg``.
+
+        Args:
+            title (str): table title.
+            keys (tuple[str, ...]): metric names to pull from ``agg``.
+
+        Returns:
+            Table: Rich table with mean and std columns.
+        """
         t = Table(title=title, box=box.SIMPLE_HEAVY, title_style="bold")
         t.add_column("metric", style="dim", no_wrap=True)
         t.add_column("mean", justify="right", style="bold green")

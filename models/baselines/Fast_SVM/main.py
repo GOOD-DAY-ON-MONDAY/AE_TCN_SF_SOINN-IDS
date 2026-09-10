@@ -61,20 +61,47 @@ class FastLinearSVMModel:
         )
 
     def fit(self, X, y, X_val=None, y_val=None):
-        # X_val/y_val accepted per the uniform signature; SVM has no early
-        # stopping, so they are ignored.
+        """Fit the scaler + SVM pipeline; validation args ignored.
+
+        Args:
+            X: training feature matrix.
+            y: training integer labels.
+            X_val: unused validation features (signature compat).
+            y_val: unused validation labels (signature compat).
+        """
         self._clf.fit(X, y)
 
     def predict(self, X):
+        """Predict hard integer class indices.
+
+        Args:
+            X: feature matrix.
+
+        Returns:
+            Array of predicted class indices.
+        """
         return self._clf.predict(X)
 
     def save(self, path):
+        """Persist the pipeline with joblib, creating parent dirs.
+
+        Args:
+            path: destination file path.
+        """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self._clf, path)
 
 
 def create_model(cfg: Any) -> FastLinearSVMModel:
+    """Build a fast linear SVM from merged config.
+
+    Args:
+        cfg: merged config node; reads ``model.alpha`` (or ``C``) and ``max_iter``.
+
+    Returns:
+        FastLinearSVMModel: configured non-incremental classifier.
+    """
     # Hyperparameters are optional; model.yaml need not exist.
     model_cfg = _cfg_get(cfg, "model", None)
 
