@@ -98,7 +98,7 @@ class AETCNSFSOINNModel:
         joblib.dump(
             {
                 "scaler": self.compressor._scaler,
-                "mlp": self.compressor._mlp,
+                "ae_state": self.compressor.net.state_dict(),
                 "latent_dim": self.compressor.latent_dim,
                 "tcn_state": self.extractor.net.state_dict(),
                 "tcn_classes": self.extractor.classes_,

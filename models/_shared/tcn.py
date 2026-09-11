@@ -38,9 +38,10 @@ def _windows(X: np.ndarray, window_size: int) -> np.ndarray:
     n, d = X.shape
     w = int(window_size)
     if n < w:
+        # Left zero-pad so short chunks still yield one window per row
+        # (output rows must equal input rows — chunked-predict contract).
         pad = np.zeros((w - n, d), dtype=np.float32)
         X = np.concatenate([pad, X], axis=0)
-        n = w
     pad = np.zeros((w - 1, d), dtype=np.float32)
     Xp = np.concatenate([pad, X], axis=0)
     out = np.empty((n, w, d), dtype=np.float32)
@@ -61,7 +62,7 @@ class _TCNNet:
         dropout: float,
         n_classes: int,
     ):
-        import torch.nn as nn
+        from torch import nn
 
         class TCNNet(nn.Module):
             def __init__(self):
@@ -153,7 +154,6 @@ class TCNExtractor:
                 dropout=self.dropout,
                 n_classes=self._n_classes,
             )
-            import torch
 
             from models._shared.baseline_helpers import get_device, print_device_check
 
@@ -169,10 +169,10 @@ class TCNExtractor:
         return self._holder.net
 
     # -- training ----------------------------------------------------------
-    def fit(self, X, y) -> "TCNExtractor":
+    def fit(self, X, y) -> TCNExtractor:
         """Train conv blocks + linear head end-to-end (cross-entropy)."""
         import torch
-        import torch.nn as nn
+        from torch import nn
 
         X = np.asarray(X, dtype=np.float32)
         y = np.asarray(y, dtype=int)
@@ -323,7 +323,6 @@ def create_tcn_model(cfg: Any) -> TCNModel:
     channels = _cfg_get(eng, "channels", [64, 64, 32])
     kernel = _cfg_get(eng, "kernel_size", 3)
     dilations = _cfg_get(eng, "dilations", [1, 2, 4, 8])
-    dropout = _cfg_get(eng, "dropout", 0.1)
     window = _cfg_get(eng, "window_size", 8)
     training = _cfg_get(cfg, "training", None)
     seed = _cfg_get(training, "random_seed", 42)

@@ -1,8 +1,9 @@
 """Shared AE module — single reusable compression behavior.
 
-Tracer-bullet sklearn implementation without torch so smoke runs stay green
-in the verified env. AE trains over epochs via MLPRegressor reconstruction;
-PCA wrapper stays the deterministic control. Thin wrappers compose this.
+Real torch encoder->bottleneck->decoder per ADR 0008: Linear stacks
+(128->64->latent / mirror), MSE reconstruction, Adam(1e-3), Gaussian input
+noise sigma=0.01 (denoising), trained on ``get_device()``. PCA wrapper stays the
+deterministic control (ADR 0003). Thin wrappers compose this.
 """
 
 from __future__ import annotations
@@ -22,48 +23,135 @@ def _cfg_get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
-def _relu(x: np.ndarray) -> np.ndarray:
-    return np.maximum(0, x)
+class _AENet:
+    """Encoder→bottleneck→decoder torch module (built lazily to keep import light)."""
+
+    def __init__(self, in_dim: int, latent_dim: int):
+        from torch import nn
+
+        self.net = nn.Sequential(
+            # encoder
+            nn.Linear(in_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, latent_dim),
+            # decoder (mirror)
+            nn.Linear(latent_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 128),
+            nn.ReLU(),
+            nn.Linear(128, in_dim),
+        )
+
+    def encode(self, x):
+        for layer in self.net[:5]:
+            x = layer(x)
+        return x
+
+    def forward(self, x):
+        return self.net(x)
 
 
 class AECompressor:
-    """Denoising-style compressor: scaler plus MLP reconstruction."""
+    """Denoising-style compressor: scaler plus torch AE reconstruction."""
 
     def __init__(
-        self, latent_dim: int = 32, random_state: int = 42, max_iter: int = 200
+        self, latent_dim: int = 32, random_state: int = 42, max_iter: int = 20
     ):
-        from sklearn.neural_network import MLPRegressor
         from sklearn.preprocessing import StandardScaler
+
+        from models._shared.baseline_helpers import get_device, print_device_check
 
         self.latent_dim = int(latent_dim)
         self.random_state = int(random_state)
         self.max_iter = int(max_iter)
         self._scaler = StandardScaler()
-        self._mlp = MLPRegressor(
-            hidden_layer_sizes=(64, self.latent_dim, 64),
-            activation="relu",
-            max_iter=self.max_iter,
-            random_state=self.random_state,
-        )
         self._fitted = False
+        self._device = get_device()
+        print_device_check("AE", self._device)
+        self._holder = None
+        self.net = None  # built on fit once in_dim is known
+
+    def _build(self, in_dim: int):
+        import torch
+
+        from models._shared.baseline_helpers import seed_torch
+
+        seed_torch(self.random_state)
+        self._holder = _AENet(in_dim=in_dim, latent_dim=self.latent_dim)
+        self.net = self._holder.net.to(self._device)
+        self._opt = torch.optim.Adam(self.net.parameters(), lr=1e-3)
 
     def fit(self, X) -> AECompressor:
+        import torch
+
         X = np.asarray(X, dtype=np.float32)
         Xs = self._scaler.fit_transform(X)
-        self._mlp.fit(Xs, Xs)
+        self._build(Xs.shape[1])
+        self.net.train()
+        dataset = torch.as_tensor(Xs, dtype=torch.float32, device=self._device)
+        batch_size = 256
+        n = dataset.shape[0]
+        for _ in range(self.max_iter):
+            perm = torch.randperm(n, device=self._device)
+            for start in range(0, n, batch_size):
+                idx = perm[start : start + batch_size]
+                batch = dataset[idx]
+                noisy = batch + 0.01 * torch.randn_like(batch)
+                recon = self.net(noisy)
+                loss = torch.nn.functional.mse_loss(recon, batch)
+                self._opt.zero_grad()
+                loss.backward()
+                self._opt.step()
         self._fitted = True
         return self
 
     def transform(self, X) -> np.ndarray:
+        import torch
+
         if not self._fitted:
             raise RuntimeError("AECompressor not fitted")
         X = np.asarray(X, dtype=np.float32)
         Xs = self._scaler.transform(X)
-        w0, w1 = self._mlp.coefs_[0], self._mlp.coefs_[1]
-        b0, b1 = self._mlp.intercepts_[0], self._mlp.intercepts_[1]
-        h0 = _relu(Xs @ w0 + b0)
-        latent = _relu(h0 @ w1 + b1)
-        return np.asarray(latent, dtype=np.float32)
+        with torch.no_grad():
+            latents = self._holder.encode(
+                torch.as_tensor(Xs, dtype=torch.float32, device=self._device)
+            )
+        return latents.cpu().numpy().astype(np.float32)
+
+    def reconstruction_loss(self, X) -> float:
+        """Mean MSE reconstruction loss on clean inputs (test seam)."""
+        import torch
+
+        if not self._fitted:
+            raise RuntimeError("AECompressor not fitted")
+        Xs = self._scaler.transform(np.asarray(X, dtype=np.float32))
+        with torch.no_grad():
+            inp = torch.as_tensor(Xs, dtype=torch.float32, device=self._device)
+            recon = self.net(inp)
+            return float(torch.nn.functional.mse_loss(recon, inp).item())
+
+    def save(self, path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(
+            {
+                "state_dict": self.net.state_dict(),
+                "scaler": self._scaler,
+                "latent_dim": self.latent_dim,
+                "in_dim": self.net[0].in_features,
+            },
+            path,
+        )
+
+    def load(self, path) -> AECompressor:
+        payload = joblib.load(Path(path))
+        self._scaler = payload["scaler"]
+        self._build(int(payload["in_dim"]))
+        self.net.load_state_dict(payload["state_dict"])
+        self._fitted = True
+        return self
 
 
 class AEModel:
@@ -72,7 +160,7 @@ class AEModel:
     supports_incremental = False
 
     def __init__(
-        self, latent_dim: int = 32, random_state: int = 42, max_iter: int = 200
+        self, latent_dim: int = 32, random_state: int = 42, max_iter: int = 20
     ):
         from sklearn.linear_model import LogisticRegression
 
@@ -101,7 +189,7 @@ class AEModel:
         joblib.dump(
             {
                 "scaler": self.compressor._scaler,
-                "mlp": self.compressor._mlp,
+                "ae_state": self.compressor.net.state_dict(),
                 "clf": self._clf,
                 "latent_dim": self.compressor.latent_dim,
                 "n_fits_": self.n_fits_,
