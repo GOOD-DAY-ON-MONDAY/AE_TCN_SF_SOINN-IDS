@@ -9,11 +9,11 @@
   "macro_precision": 0.9986702127659575,
   "macro_recall": 0.9985835694050991,
   "macro_f1": 0.9986250011804592,
-  "latency_ms": 0.00023812362297366446,
-  "peak_mem_gb": 0.2877655029296875,
-  "train_time_s": 0.014062,
+  "latency_ms": 0.0002524608574746238,
+  "peak_mem_gb": 0.2625732421875,
+  "train_time_s": 0.013959,
   "run_dir": "/Users/animesh/AE_TCN_SFSONIN_IDS/models/baselines/Fast_SVM/netml2020/seed_3",
-  "timestamp": "2026-09-11T09:55:40+00:00",
+  "timestamp": "2026-09-11T10:21:02+00:00",
   "confusion_matrix": [
     [
       750,

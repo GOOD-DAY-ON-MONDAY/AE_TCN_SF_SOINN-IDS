@@ -1,5 +1,5 @@
 {
-  "model": "/Users/animesh/AE_TCN_SFSONIN_IDS/models/baselines/Fast_SVM",
+  "model": "/Users/animesh/AE_TCN_SFSONIN_IDS/models/baselines/SVM",
   "dataset": "netml2020",
   "seed": 2,
   "accuracy": 0.9993131868131868,
@@ -9,11 +9,11 @@
   "macro_precision": 0.9992927864214993,
   "macro_recall": 0.9993333333333334,
   "macro_f1": 0.9993125872544424,
-  "latency_ms": 0.00026465178442387175,
-  "peak_mem_gb": 0.2563629150390625,
-  "train_time_s": 0.014229,
-  "run_dir": "/Users/animesh/AE_TCN_SFSONIN_IDS/models/baselines/Fast_SVM/netml2020/seed_2",
-  "timestamp": "2026-09-11T10:21:02+00:00",
+  "latency_ms": 0.00030131043756257867,
+  "peak_mem_gb": 0.26385498046875,
+  "train_time_s": 0.164562,
+  "run_dir": "/Users/animesh/AE_TCN_SFSONIN_IDS/models/baselines/SVM/netml2020/seed_2",
+  "timestamp": "2026-09-11T10:20:57+00:00",
   "confusion_matrix": [
     [
       749,

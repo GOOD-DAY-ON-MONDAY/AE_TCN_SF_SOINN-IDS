@@ -36,12 +36,16 @@ def _cfg_get(obj: Any, key: str, default: Any = None) -> Any:
 class FastLinearSVMModel:
     """Non-incremental fast Linear SVM (SGDClassifier) exposing fit / predict / save."""
 
-    def __init__(self, alpha: float = 0.0001, max_iter: int = 1000):
+    def __init__(
+        self, alpha: float = 0.0001, max_iter: int = 1000, random_state: int = 42
+    ):
         """Build a StandardScaler + SGDClassifier(loss="hinge") pipeline.
 
         Args:
             alpha (float): L2 regularization penalty multiplier (inversely proportional to C).
             max_iter (int): Maximum number of passes over the training data.
+            random_state (int): seed for SGD shuffling (injected per seed by
+                the Runner via cfg.training.random_seed).
         """
         from sklearn.linear_model import SGDClassifier
         from sklearn.pipeline import make_pipeline
@@ -55,7 +59,7 @@ class FastLinearSVMModel:
                 penalty="l2",
                 alpha=alpha,
                 max_iter=max_iter,
-                random_state=42,
+                random_state=int(random_state),
                 n_jobs=-1,
             ),
         )
@@ -112,5 +116,9 @@ def create_model(cfg: Any) -> FastLinearSVMModel:
         alpha = 1.0 / float(c_val)
 
     max_iter = _cfg_get(model_cfg, "max_iter", None) or _cfg_get(cfg, "max_iter", 1000)
+    training = _cfg_get(cfg, "training", None)
+    seed = _cfg_get(training, "random_seed", 42)
 
-    return FastLinearSVMModel(alpha=float(alpha), max_iter=int(max_iter))
+    return FastLinearSVMModel(
+        alpha=float(alpha), max_iter=int(max_iter), random_state=int(seed)
+    )
