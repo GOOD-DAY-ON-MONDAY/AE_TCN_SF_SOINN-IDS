@@ -64,7 +64,9 @@ class AETCNSFSOINNModel:
         y = np.asarray(y)
         if not self._fitted:
             self.compressor.fit(X)
-            self.cluster.fit(self._features(X), y)
+            Z = self.compressor.transform(X)
+            self.extractor.fit(Z, y)  # train TCN end-to-end (ADR 0006)
+            self.cluster.fit(self.extractor.transform(Z), y)
             self._fitted = True
         else:
             self.cluster.partial_fit(self._features(X), y)
@@ -112,8 +114,8 @@ class AETCNSFSOINNModel:
                 "scaler": self.compressor._scaler,
                 "mlp": self.compressor._mlp,
                 "latent_dim": self.compressor.latent_dim,
-                "weights": self.extractor.weights,
-                "biases": self.extractor.biases,
+                "tcn_state": self.extractor.net.state_dict(),
+                "tcn_classes": self.extractor.classes_,
                 "channels": self.extractor.channels,
                 "prototypes": self.cluster.prototypes,
                 "labels": self.cluster.labels,

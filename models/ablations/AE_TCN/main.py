@@ -61,8 +61,10 @@ class AETCNModel:
         y = np.asarray(y)
         if self.n_fits_ == 0:
             self.compressor.fit(X)
-        Z = self._features(X)
-        self._clf.fit(Z, y)
+        Z = self.compressor.transform(X)
+        self.extractor.fit(Z, y)  # train TCN end-to-end (ADR 0006)
+        Zf = self.extractor.transform(Z)
+        self._clf.fit(Zf, y)
         self.n_fits_ += 1
 
     def predict(self, X):
@@ -76,8 +78,8 @@ class AETCNModel:
                 "scaler": self.compressor._scaler,
                 "mlp": self.compressor._mlp,
                 "latent_dim": self.compressor.latent_dim,
-                "weights": self.extractor.weights,
-                "biases": self.extractor.biases,
+                "tcn_state": self.extractor.net.state_dict(),
+                "tcn_classes": self.extractor.classes_,
                 "channels": self.extractor.channels,
                 "clf": self._clf,
                 "n_fits_": self.n_fits_,

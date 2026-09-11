@@ -16,3 +16,7 @@ issues/
 logs/builder_history
 code
 vscode_cli.tar.gz
+# Runner run outputs (per-seed artifacts, metrics, plots)
+models/**/cicids2017/
+models/**/netml2020/
+reports/comparison_results/all_runs.csv
