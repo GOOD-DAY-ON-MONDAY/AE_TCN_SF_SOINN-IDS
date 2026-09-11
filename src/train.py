@@ -298,6 +298,9 @@ def cmd_train(args: argparse.Namespace) -> int:
             X_val=arrays.X_val,
             y_val=arrays.y_val,
             progress=progress,
+            X_raw=X,
+            y_raw=y,
+            val_split=float(cfg.splitting.val_split),
         )
     return 0
 

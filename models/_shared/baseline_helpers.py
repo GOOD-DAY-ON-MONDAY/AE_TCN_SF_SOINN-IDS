@@ -1,12 +1,49 @@
 """Baseline infra extensions — sequence, incremental, distillation helpers.
 
 Torch-ready interfaces with sklearn tracer implementations so Baselines
-stay green without new Runner plumbing.
+stay green without new Runner plumbing. Torch seeding/device helpers live
+here (never under ``src/`` — the Runner imports no DL framework, ADR 0002).
 """
 
 from __future__ import annotations
 
 import numpy as np
+
+
+def seed_torch(seed: int) -> None:
+    """Seed torch's global RNG on CPU and all CUDA devices (if any).
+
+    Args:
+        seed (int): seed value; called per-seed from ``create_model`` so each
+            Runner seed iteration produces a genuinely different init.
+    """
+    import torch
+
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
+
+def get_device():
+    """Return the torch device to train on: cuda when available, else cpu.
+
+    Returns:
+        torch.device: the selected device (verified by callers via
+        ``print_device_check``, never assumed).
+    """
+    import torch
+
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def print_device_check(name: str, device) -> None:
+    """Print a one-line device check so GPU usage is verified, not assumed.
+
+    Args:
+        name (str): model name to label the line with.
+        device (torch.device): the device the model was moved to.
+    """
+    print(f"[device-check] {name} using device: {device}")
 
 
 class SequenceBatcher:

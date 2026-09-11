@@ -745,6 +745,20 @@ def print_aggregate(agg: dict[str, tuple[float, float]], n_seeds: int) -> None:
     )
 
 
+def _seed_everything(seed: int) -> None:
+    """Seed the Runner-side global RNGs once per seed iteration.
+
+    Covers numpy and the stdlib ``random`` module. Deep-learning framework
+    seeding is NOT done here: the Runner never imports any DL framework
+    (grep-guarded in tests/test_data_seam.py); framework-based models seed
+    their own framework in ``create_model`` via the shared baseline helper.
+    """
+    import random
+
+    np.random.seed(seed)
+    random.seed(seed)
+
+
 def run_seeds(
     model_dir: str | Path,
     dataset: str,
@@ -759,31 +773,56 @@ def run_seeds(
     report_root: str | Path | None = None,
     csv_path: str | Path | None = None,
     progress: Any = None,
+    X_raw: Any = None,
+    y_raw: Any = None,
+    val_split: float | None = None,
 ) -> list[dict[str, Any]]:
     """One Run per seed, aggregated into mean ± std.
 
-    Returns the per-seed row list; aggregation is printed. Rerunning a seed
-    overwrites its ``seed_<n>/`` directory.
+    Before each run, the seed is injected into ``cfg.training.random_seed``
+    (models read it in ``create_model``) and every global RNG is reseeded.
+    When ``X_raw``/``y_raw``/``val_split`` are given, the train/val split is
+    rebuilt per seed (seed-driven), so each seed sees a genuinely different
+    split. Returns the per-seed row list; aggregation is printed. Rerunning
+    a seed overwrites its ``seed_<n>/`` directory.
     """
     if not seeds:
         raise RunnerError("--seeds received no values; give at least one seed.")
-    rows = [
-        run_single_seed(
-            model_dir=model_dir,
-            dataset=dataset,
-            seed=seed,
-            cfg=cfg,
-            X_train=X_train,
-            y_train=y_train,
-            X_val=X_val,
-            y_val=y_val,
-            X_test=X_test,
-            y_test=y_test,
-            report_root=report_root,
-            csv_path=csv_path,
-            progress=progress,
+    from src.data.seam import assemble_run_arrays
+
+    rows = []
+    for seed in seeds:
+        # Inject the per-seed value into the config the model will read.
+        training_cfg = _cfg_get(cfg, "training")
+        if training_cfg is not None:
+            if isinstance(training_cfg, dict):
+                training_cfg["random_seed"] = seed
+            else:
+                setattr(training_cfg, "random_seed", seed)
+        _seed_everything(seed)
+        if X_raw is not None and y_raw is not None and val_split is not None:
+            arrays = assemble_run_arrays(X_raw, y_raw, val_split, seed)
+            X_train_s, y_train_s = arrays.X_train, arrays.y_train
+            X_val_s, y_val_s = arrays.X_val, arrays.y_val
+        else:
+            X_train_s, y_train_s = X_train, y_train
+            X_val_s, y_val_s = X_val, y_val
+        rows.append(
+            run_single_seed(
+                model_dir=model_dir,
+                dataset=dataset,
+                seed=seed,
+                cfg=cfg,
+                X_train=X_train_s,
+                y_train=y_train_s,
+                X_val=X_val_s,
+                y_val=y_val_s,
+                X_test=X_test,
+                y_test=y_test,
+                report_root=report_root,
+                csv_path=csv_path,
+                progress=progress,
+            )
         )
-        for seed in seeds
-    ]
     print_aggregate(aggregate_rows(rows), len(rows))
     return rows

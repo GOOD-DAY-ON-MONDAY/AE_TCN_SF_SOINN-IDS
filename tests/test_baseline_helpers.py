@@ -18,6 +18,42 @@ def test_sequence_batcher_shapes():
     assert X_back.shape[1] == 6
 
 
+def test_seed_torch_is_deterministic():
+    import torch
+
+    from models._shared.baseline_helpers import seed_torch
+
+    seed_torch(7)
+    a = torch.rand(4)
+    seed_torch(7)
+    b = torch.rand(4)
+    assert torch.equal(a, b)
+    seed_torch(8)
+    c = torch.rand(4)
+    assert not torch.equal(a, c)
+
+
+def test_get_device_returns_torch_device():
+    import torch
+
+    from models._shared.baseline_helpers import get_device
+
+    device = get_device()
+    assert isinstance(device, torch.device)
+    assert device.type in ("cpu", "cuda")
+
+
+def test_print_device_check_outputs_model_and_device(capsys):
+    import torch
+
+    from models._shared.baseline_helpers import print_device_check
+
+    print_device_check("TestModel", torch.device("cpu"))
+    out = capsys.readouterr().out
+    assert "TestModel" in out
+    assert "cpu" in out
+
+
 def test_distillation_helper_trains_student(tmp_path):
     from sklearn.linear_model import LogisticRegression
 
