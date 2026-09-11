@@ -90,21 +90,7 @@ class AETCNSFSOINNModel:
     def predict_and_adapt(self, X):
         if not self._fitted:
             raise RuntimeError("AETCNSFSOINNModel not fitted")
-        X = np.asarray(X, dtype=np.float32)
-        Z = self._features(X)
-        out: list[int] = []
-        next_label = max(self.cluster.labels, default=-1) + 1
-        for zi in Z:
-            idx, dist = self.cluster._nearest(zi)
-            if idx < 0 or dist > self.cluster.threshold:
-                self.cluster.prototypes.append(zi.astype(np.float32))
-                self.cluster.labels.append(int(next_label))
-                self.cluster.counts.append(1)
-                out.append(int(next_label))
-                next_label += 1
-            else:
-                out.append(self.cluster.labels[idx])
-        return np.asarray(out, dtype=int)
+        return self.cluster.predict_and_adapt(self._features(np.asarray(X)))
 
     def save(self, path):
         path = Path(path)
@@ -120,6 +106,8 @@ class AETCNSFSOINNModel:
                 "prototypes": self.cluster.prototypes,
                 "labels": self.cluster.labels,
                 "counts": self.cluster.counts,
+                "edges": [tuple(sorted(e)) for e in self.cluster.edges],
+                "edge_ages": list(self.cluster.edges.values()),
                 "threshold": self.cluster.threshold,
                 "n_fits_": self.n_fits_,
             },
