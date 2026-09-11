@@ -1,4 +1,4 @@
-"""Fast Linear SVM baseline — SGD-based tracer-bullet model for the Runner harness.
+"""Fast Linear SVM baseline — linear SVM (StandardScaler + SGDClassifier with hinge loss) for the Runner harness.
 
 Implements the v1 contract: ``create_model(cfg)`` factory, ``fit(X, y, X_val=None,
 y_val=None)`` (val ignored), ``predict(X)`` (hard integer indices, pure read), and
